@@ -1,2 +1,7 @@
-OPENAI_API_KEY = "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"
-TELEGRAM_BOT_TOKEN = "7943904490:AAEL2X6ELkqQpDVafapZJqjzrvKhCohZJYY"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
