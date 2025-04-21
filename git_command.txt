@@ -1,0 +1,17 @@
+-- update github
+
+git add .
+git commit -m "Обновления проекта"
+git push origin main
+
+
+-- generate file
+
+pip freeze > requirements.txt
+
+
+-- add file to git
+
+git add requirements.txt
+git commit -m "Обновлён requirements.txt"
+git push origin main

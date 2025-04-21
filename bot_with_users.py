@@ -348,4 +348,4 @@ async def root():
 if __name__ == "__main__":
     print("DEBUG: Запуск FastAPI через Uvicorn")
     # Переконайтесь, що uvicorn встановлено: pip install uvicorn[standard]
-    uvicorn.run(fastapi_app, host="0.0.0.0", port=8000)
+    uvicorn.run(fastapi_app, host="0.0.0.0", port=10000)
