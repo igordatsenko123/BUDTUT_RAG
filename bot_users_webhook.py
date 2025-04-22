@@ -51,7 +51,7 @@ NAME, SURNAME, PHONE, SPECIALTY = range(4)
 
 # === Кнопки меню ===
 menu_keyboard = ReplyKeyboardMarkup(
-    [[KeyboardButton("📋 Профиль")], [KeyboardButton("✏️ Обновить анкету")]],
+    [[KeyboardButton("📋 Профіль")], [KeyboardButton("✏️ Оновити анкету")]],
     resize_keyboard=True
 )
 
@@ -110,7 +110,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with open(USER_FILE, "r", encoding="utf-8") as f:
                 name = json.load(f)[str(user_id)]["name"]
             await update.message.reply_text(
-                f"С возвращением, {name}!\nВыбери, что хочешь сделать:",
+                f"З поверненням, {name}!\nГотовий відповідати на твої запитання:",
                 reply_markup=menu_keyboard
             )
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
@@ -120,13 +120,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
              return NAME
         return ConversationHandler.END
     else:
-        await update.message.reply_text("Привет! Давай сначала заполним анкету. Как тебя зовут?")
+        await update.message.reply_text("Привіт! Давай для початку познайомимося. Як тебе звати?")
         return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: Получено имя: {update.message.text}")
     context.user_data["name"] = update.message.text
-    await update.message.reply_text("Фамилия?")
+    await update.message.reply_text("Призвіще?")
     return SURNAME
 
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,11 +138,11 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: Получен телефон: {update.message.text}")
     context.user_data["phone"] = update.message.text
-    await update.message.reply_text("Специальность?")
+    await update.message.reply_text("Спеціальність?")
     return SPECIALTY
 
 async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Завершение анкеты")
+    print("DEBUG: Завершення анкети")
     context.user_data["specialty"] = update.message.text
     user_id = str(update.effective_user.id)
 
@@ -164,8 +164,8 @@ async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(USER_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        print(f"DEBUG: Анкета сохранена для user_id={user_id}")
-        await update.message.reply_text("Спасибо! Теперь давай продолжим общение 😊", reply_markup=menu_keyboard)
+        print(f"DEBUG: Анкета збережена для user_id={user_id}")
+        await update.message.reply_text("Дякую, тепер давай продовжимо спілкування 😊", reply_markup=menu_keyboard)
     except (IOError, json.JSONDecodeError) as e:
         print(f"ERROR: Не вдалося зберегти анкету для {user_id}: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при збереженні анкети.")
@@ -174,16 +174,16 @@ async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Анкета отменена пользователем")
+    print("DEBUG: Анкета відхилена користувачем")
     context.user_data.clear() # Очищуємо дані при відміні
-    await update.message.reply_text("Анкета отменена.", reply_markup=menu_keyboard) # Показуємо меню
+    await update.message.reply_text("Анкета відхилена.", reply_markup=menu_keyboard) # Показуємо меню
     return ConversationHandler.END
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Запрос профиля")
+    print("DEBUG: Запит профілю")
     user_id = str(update.effective_user.id)
     if not is_registered(user_id):
-        await update.message.reply_text("Ты ещё не зарегистрирован. Напиши /start.")
+        await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
         return ConversationHandler.END # Повертаємо, щоб вийти з можливого діалогу
 
     try:
@@ -192,10 +192,10 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = data[user_id]
         profile_text = (
             f"👤 *Твоя анкета:*\n"
-            f"Имя: {user.get('name', 'N/A')}\n"
-            f"Фамилия: {user.get('surname', 'N/A')}\n"
+            f"Ім'я: {user.get('name', 'N/A')}\n"
+            f"Призвіще: {user.get('surname', 'N/A')}\n"
             f"Телефон: {user.get('phone', 'N/A')}\n"
-            f"Специальность: {user.get('specialty', 'N/A')}"
+            f"Спеціальність: {user.get('specialty', 'N/A')}"
         )
         await update.message.reply_text(profile_text, parse_mode=ParseMode.MARKDOWN_V2) # Використовуємо константу
     except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
@@ -206,11 +206,11 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not is_registered(user_id):
-         await update.message.reply_text("Ты ещё не зарегистрирован. Напиши /start.")
+         await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
          return ConversationHandler.END # Виходимо, якщо не зареєстрований
 
-    print("DEBUG: Обновление профиля")
-    await update.message.reply_text("Обновим анкету. Как тебя зовут?")
+    print("DEBUG: Оновлення профілю")
+    await update.message.reply_text("Оновимо анкету. Як тебе звати?")
     return NAME # Починаємо діалог оновлення
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -224,13 +224,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Перевірка кнопок меню (дублювання з реєстрації хендлерів, можна прибрати, якщо хендлери налаштовані коректно) ---
     # Цей блок може бути необов'язковим, якщо Regex хендлери працюють стабільно
-    if text == "📋 Профиль":
+    if text == "📋 Профіль":
         return await show_profile(update, context)
     # Обробка "✏️ Обновить анкету" ініціюється через ConversationHandler, тут не потрібна
 
     # --- Перевірка реєстрації ---
     if not is_registered(user_id):
-        await update.message.reply_text("Сначала нужно заполнить анкету. Напиши /start.")
+        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
         return # Немає стану для повернення, бо це не ConversationHandler
 
     # --- Обробка повідомлення через QA Engine ---
@@ -242,7 +242,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Припускаємо, що qa_engine існує і функція get_answer є
         from qa_engine import get_answer
         answer = get_answer(text) # Переконайтесь, що ця функція існує і працює
-        print("💬 Ответ бота:", answer)
+        print("💬 Відповідь бота:", answer)
         log_message(user.id, username, update.message.message_id, "text", "answer", answer)
         await update.message.reply_text(answer)
     except ImportError:
@@ -256,9 +256,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ваш код handle_voice без змін, але переконайтеся, що ffmpeg встановлено на Render
     user_id = update.effective_user.id
-    print("DEBUG: Обработка голосового сообщения")
+    print("DEBUG: Обробка голосового повідомлення")
     if not is_registered(user_id):
-        await update.message.reply_text("Сначала нужно заполнить анкету. Напиши /start.")
+        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
         return
 
     voice = update.message.voice
@@ -275,7 +275,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"DEBUG: Voice file downloaded to {input_ogg}")
 
         # Конвертуємо через ffmpeg
-        print("DEBUG: Конвертация через ffmpeg")
+        print("DEBUG: Конвертація через ffmpeg")
         process = subprocess.run(
             ["ffmpeg", "-y", "-i", input_ogg, "-acodec", "pcm_s16le", "-ar", "16000", output_wav], # Додано параметри для кращої сумісності з Whisper
             capture_output=True, text=True, check=True
@@ -290,7 +290,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("DEBUG: Отправка в Whisper API")
             response = client.audio.transcriptions.create(model="whisper-1", file=f)
         recognized_text = response.text
-        print(f"DEBUG: Распознанный текст: {recognized_text}")
+        print(f"DEBUG: Роспізнаний текст: {recognized_text}")
 
         log_message(user.id, username, update.message.message_id, "voice", "question", recognized_text)
 
@@ -341,7 +341,7 @@ async def lifespan(app: FastAPI):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            MessageHandler(filters.Regex('^✏️ Обновить анкету$'), update_profile), # Точка входу через кнопку
+            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Точка входу через кнопку
         ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
@@ -353,7 +353,7 @@ async def lifespan(app: FastAPI):
         per_message=False
     )
     application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.Regex('^📋 Профиль$'), show_profile))
+    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
     application.add_handler(CommandHandler("profile", show_profile)) # Додатково команда
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     # Цей обробник має бути останнім для TEXT
