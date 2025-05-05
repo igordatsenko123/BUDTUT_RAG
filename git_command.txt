@@ -1,7 +1,6 @@
 -- update github
 
-git add .
-git commit -m "Обновления проекта"
+git add . origingit commit -m "Обновления проекта"
 git push origin main
 
 
