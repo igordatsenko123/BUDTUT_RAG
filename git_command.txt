@@ -1,16 +1,21 @@
--- update github
-
-git add . origingit commit -m "Обновления проекта"
-git push origin main
-
-
 -- generate file
 
 pip freeze > requirements.txt
 
 
--- add file to git
 
-git add requirements.txt
-git commit -m "Обновлён requirements.txt"
+
+Обновить ГІТ
+
+# 1. Проверить текущий статус (изменённые файлы и т.д.)
+git status
+
+# 2. Добавить все изменения в индекс (можно указать конкретные файлы вместо .)
+git add .
+
+# 3. Зафиксировать изменения с комментарием
+git commit -m "Твой комментарий про изменения"
+
+# 4. Отправить изменения на GitHub (в ветку, например, main)
 git push origin main
+
