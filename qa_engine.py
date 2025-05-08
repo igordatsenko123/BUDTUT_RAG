@@ -40,20 +40,22 @@ def get_answer(query, top_k=10):
             "Lists: use numbered lists (1., 2., 3.) or bullets (•) whenever describing steps, rules, tool sets, or check‑lists; keep indentation consistent for easy mobile reading.\n\n"
 
             "Bold text rule (absolute)\n"
-            "NEVER use Markdown symbols *, **, or #.  \n"
-            "Apply bold only via Telegram MessageEntity type <b> or its library equivalent.  \n"
-            "  *In practice:* wrap bold fragments in HTML tags `<b>…</b>`; the backend must send the message with `parse_mode=\"HTML\"`.  \n"
-            "If entities/HTML cannot be used, output the words without bold rather than inserting Markdown.\n\n"
+            "Do not use Markdown symbols (*, **, #) or raw HTML tags (<b>, </b>) in output.\n"
+            "If bolding is required and Telegram supports MessageEntity or HTML rendering via `parse_mode=\"HTML\"`, wrap bold fragments in <b>…</b>.\n"
+            "If HTML rendering is not guaranteed, output plain text without any formatting symbols.\n"
+            "Bold only key terms or hazardous actions; do not over-bold.\n\n"
+
+            "Emojis: maximum 2 per message, and only to reinforce attention or a friendly tone.\n"
+            "No extra punctuation or markdown beyond the permitted bold.\n\n"
 
             "Length & Clarity\n"
             "Keep answers as concise as possible without losing essential meaning.\n"
             "If the question is narrow, reply briefly (2 – 5 sentences).\n"
             "When referencing a standard, mention the DSTU/ISO number but do not quote the full text.\n\n"
 
-            + "\n\n".join(relevant_chunks)  # Припускаючи, що 'relevant_chunks' буде визначено десь у вашому коді
-            + f"\n\nQuestion: {query}\nAnswer:"  # Припускаючи, що 'query' буде визначено десь у вашому коді
+            + "\n\n".join(relevant_chunks)
+            + f"\n\nQuestion: {query}\nAnswer:"
     )
-
 
     completion = client.chat.completions.create(
         # model="gpt-4-turbo",
