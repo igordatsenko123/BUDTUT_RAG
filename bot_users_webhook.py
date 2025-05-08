@@ -244,7 +244,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         answer = get_answer(text) # Переконайтесь, що ця функція існує і працює
         print("💬 Відповідь бота:", answer)
         log_message(user.id, username, update.message.message_id, "text", "answer", answer)
-        await update.message.reply_text(answer)
+        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
     except ImportError:
          print("ERROR: Модуль qa_engine не знайдено!")
          await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
@@ -298,7 +298,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from qa_engine import get_answer # Переконайтесь, що імпорт тут доречний або зробіть його глобальним
         answer = get_answer(recognized_text)
         log_message(user.id, username, update.message.message_id, "voice", "answer", answer)
-        await update.message.reply_text(answer)
+        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
 
     except FileNotFoundError:
         print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
