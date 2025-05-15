@@ -448,7 +448,7 @@ async def telegram_webhook_endpoint(request: Request):
 async def root():
     return {"message": "FastAPI server for Telegram Bot is running (Webhook Mode)"}
 
-# === Запуск через Uvicorn ===
+# === Запуск  Uvicorn ===
 if __name__ == "__main__":
     print("DEBUG: Запуск FastAPI через Uvicorn (Webhook Mode)")
     # Render зазвичай надає змінну PORT, Uvicorn її підхопить.
