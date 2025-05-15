@@ -34,7 +34,7 @@ WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
 if not WEBHOOK_URL_BASE:
     raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE (напр., https://your-app.onrender.com)!")
 # Генеруємо випадковий секрет, якщо не заданий (краще задавати через ENV)
-WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", secrets.token_hex(32))
+WEBHOOK_SECRET_TOKEN = "my_token123"
 
 # Конструюємо повний шлях для вебхука. Використання токену в шляху - додатковий рівень перевірки.
 WEBHOOK_PATH = f"/telegram/{TELEGRAM_BOT_TOKEN}"
