@@ -4,23 +4,22 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 import asyncio
-import secrets # Для генерації секретного токена (якщо не заданий)
 
 # --- Telegram ---
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application, MessageHandler, filters, ContextTypes,
-    CommandHandler, ConversationHandler, ApplicationBuilder, ExtBot # Додано ExtBot
+    CommandHandler, ConversationHandler, ApplicationBuilder, ExtBot
 )
-from telegram.constants import ParseMode # Для Markdown у профілі
+from telegram.constants import ParseMode
 
 # --- OpenAI ---
-from config import TELEGRAM_BOT_TOKEN, OPENAI_API_KEY # Переконайтесь, що ці змінні є в config.py або як змінні середовища
+from config import TELEGRAM_BOT_TOKEN, OPENAI_API_KEY
 from openai import OpenAI
 
 # --- FastAPI & Uvicorn ---
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Response, status # Додано Request, HTTPException, Response, status
+from fastapi import FastAPI, Request, HTTPException, Response, status
 from contextlib import asynccontextmanager
 
 # === Клієнти та Налаштування ===
@@ -29,27 +28,21 @@ if not TELEGRAM_BOT_TOKEN:
 if not OPENAI_API_KEY:
     raise ValueError("Не встановлено змінну OPENAI_API_KEY!")
 
-# Рекомендується отримувати ці змінні з середовища
 WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
 if not WEBHOOK_URL_BASE:
-    raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE (напр., https://your-app.onrender.com)!")
-# Генеруємо випадковий секрет, якщо не заданий (краще задавати через ENV)
-WEBHOOK_SECRET_TOKEN = "my_token123"
+    raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE!")
 
-# Конструюємо повний шлях для вебхука. Використання токену в шляху - додатковий рівень перевірки.
+WEBHOOK_SECRET_TOKEN = "my_token123"
 WEBHOOK_PATH = f"/telegram/{TELEGRAM_BOT_TOKEN}"
 WEBHOOK_URL = f"{WEBHOOK_URL_BASE}{WEBHOOK_PATH}"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# === Файли ===
 USER_FILE = "user_info.json"
 LOG_FILE = "chat_history.csv"
 
-# === Стани анкети ===
 NAME, SURNAME, PHONE, SPECIALTY = range(4)
 
-# === Кнопки меню ===
 menu_keyboard = ReplyKeyboardMarkup(
     [[KeyboardButton("📋 Профіль")], [KeyboardButton("✏️ Оновити анкету")]],
     resize_keyboard=True
@@ -57,7 +50,7 @@ menu_keyboard = ReplyKeyboardMarkup(
 
 print("DEBUG: Імпорти завершені")
 print(f"DEBUG: Webhook URL буде встановлено на: {WEBHOOK_URL}")
-print(f"DEBUG: Webhook Secret Token: {'*' * 5}{WEBHOOK_SECRET_TOKEN[-5:]}") # Не логуйте повний токен!
+print(f"DEBUG: Webhook Secret Token: {'*' * 5}{WEBHOOK_SECRET_TOKEN[-5:]}")
 
 # === Логування ===
 def log_message(user_id, username, msg_id, msg_type, role, content):
