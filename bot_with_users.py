@@ -321,7 +321,7 @@ async def lifespan(app: FastAPI):
     await telegram_app.initialize()
 
     # Запускаємо обробку апдейтів (polling) у фоновому режимі
-    # Це НЕ блокує FastAPI
+
     await telegram_app.start()
     await telegram_app.updater.start_polling() # Не забуваємо запустити саме отримання апдейтів
 
