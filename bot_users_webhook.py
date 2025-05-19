@@ -322,7 +322,30 @@ async def lifespan(app: FastAPI):
     print("🔁 Lifespan запускається: ініціалізація Telegram App...")
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.state.telegram_app = application
-    # (handlers реєстрація без змін)
+
+    from main_handlers import start, get_name, get_surname, get_phone, get_specialty, cancel
+    from main_handlers import show_profile, update_profile, handle_message, handle_voice
+
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start),
+            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
+            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
+            SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False
+    )
+    application.add_handler(conv_handler)
+    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
+    application.add_handler(CommandHandler("profile", show_profile))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
     await application.initialize()
     await application.start()
     try:
