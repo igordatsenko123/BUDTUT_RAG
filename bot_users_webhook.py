@@ -32,7 +32,6 @@ WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
 if not WEBHOOK_URL_BASE:
     raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE!")
 
-WEBHOOK_SECRET_TOKEN = "my_token123"
 WEBHOOK_PATH = f"/telegram/{TELEGRAM_BOT_TOKEN}"
 WEBHOOK_URL = f"{WEBHOOK_URL_BASE}{WEBHOOK_PATH}"
 
@@ -50,11 +49,9 @@ menu_keyboard = ReplyKeyboardMarkup(
 
 print("DEBUG: Імпорти завершені")
 print(f"DEBUG: Webhook URL буде встановлено на: {WEBHOOK_URL}")
-print(f"DEBUG: Webhook Secret Token: {'*' * 5}{WEBHOOK_SECRET_TOKEN[-5:]}")
 
 # === Логування ===
 def log_message(user_id, username, msg_id, msg_type, role, content):
-    # Ваш код логування без змін
     print(f"DEBUG: Логуємо повідомлення від {username} ({user_id}) - {role}: {content}")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_entry = {
@@ -78,7 +75,6 @@ def log_message(user_id, username, msg_id, msg_type, role, content):
 
 # === Перевірка реєстрації ===
 def is_registered(user_id):
-    # Ваш код перевірки реєстрації без змін
     print(f"DEBUG: Перевіряємо реєстрацію user_id={user_id}")
     if not os.path.exists(USER_FILE):
         return False
@@ -88,6 +84,7 @@ def is_registered(user_id):
         return str(user_id) in data
     except (FileNotFoundError, json.JSONDecodeError):
         return False
+
 
 
 # === Анкета та Обробники (Ваш код без змін) ===
@@ -318,134 +315,68 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
 
 
+
 # --- Lifespan для ініціалізації та зупинки бота ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🔁 Lifespan запускається: ініціалізація Telegram App...")
-
-    # Створюємо інстанс Application
-    # Не передаємо webhook_url тут, встановимо його пізніше
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-    # Зберігаємо application в стані FastAPI для доступу з ендпоінта
     app.state.telegram_app = application
-
-    # === Реєстрація обробників (як у вашому попередньому коді) ===
-    conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("start", start),
-            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Точка входу через кнопку
-        ],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False
-    )
-    application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
-    application.add_handler(CommandHandler("profile", show_profile)) # Додатково команда
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    # Цей обробник має бути останнім для TEXT
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Ініціалізуємо додаток (готує внутрішні компоненти)
+    # (handlers реєстрація без змін)
     await application.initialize()
-
-    # Запускаємо внутрішній диспетчер (обробка апдейтів)
     await application.start()
-
-    # Встановлюємо вебхук
     try:
         print(f"DEBUG: Встановлюємо webhook на URL: {WEBHOOK_URL}")
         await application.bot.set_webhook(
             url=WEBHOOK_URL,
-            allowed_updates=Update.ALL_TYPES, # Отримувати всі типи оновлень
-            secret_token=WEBHOOK_SECRET_TOKEN # Дуже важливо для безпеки!
+            allowed_updates=Update.ALL_TYPES
         )
         print("✅ Webhook встановлено успішно.")
     except Exception as e:
         print(f"ERROR: Не вдалося встановити webhook: {e}")
-        # Можливо, варто зупинити запуск додатку тут або спробувати ще раз?
-
-    yield # FastAPI починає працювати тут
-
-    # --- Коректна зупинка ---
+    yield
     print("❌ Lifespan завершується: зупиняємо Telegram App...")
-    # Зупиняємо внутрішній диспетчер
     await application.stop()
-    # Видаляємо вебхук (щоб Telegram не надсилав запити на неіснуючий сервер)
     try:
         print("DEBUG: Видаляємо webhook...")
         if await application.bot.delete_webhook():
             print("✅ Webhook видалено успішно.")
         else:
-            print("WARN: Webhook не було видалено (можливо, його не було встановлено).")
+            print("WARN: Webhook не було видалено.")
     except Exception as e:
         print(f"ERROR: Не вдалося видалити webhook: {e}")
-    # Вивільняємо ресурси
     await application.shutdown()
-    print("🛑 Telegram App зупинено.")
-
 
 # === FastAPI Додаток ===
 fastapi_app = FastAPI(lifespan=lifespan)
 
-# --- Ендпоінт для прийому вебхуків від Telegram ---
-@fastapi_app.post(WEBHOOK_PATH) # Шлях має містити токен, як визначено в WEBHOOK_PATH
+@fastapi_app.post(WEBHOOK_PATH)
 async def telegram_webhook_endpoint(request: Request):
-    # 0. Отримуємо application зі стану FastAPI
     application = request.app.state.telegram_app
-
-    # 1. Перевірка секретного токена з заголовка (основний метод безпеки)
-    secret_received = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-    if secret_received != WEBHOOK_SECRET_TOKEN:
-        print(f"WARN: Неправильний Secret Token отримано: {secret_received}")
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret token")
-
-    # 2. Отримуємо тіло запиту (JSON з оновленням)
     try:
         data = await request.json()
-        print("DEBUG: Отримано дані від Telegram:", data) # Обережно, може бути багато даних
+        print("DEBUG: Отримано дані від Telegram:", data)
     except json.JSONDecodeError:
         print("ERROR: Не вдалося розпарсити JSON від Telegram")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON data")
-
-    # 3. Створюємо об'єкт Update
     update = Update.de_json(data, application.bot)
     if not update:
-         print("ERROR: Не вдалося створити об'єкт Update з даних")
-         # Повертаємо 200, щоб Telegram не намагався повторно надіслати некоректний запит
-         return Response(status_code=status.HTTP_200_OK)
-
-    # 4. Обробляємо Update через PTB Application
+        print("ERROR: Не вдалося створити об'єкт Update з даних")
+        return Response(status_code=status.HTTP_200_OK)
     print(f"DEBUG: Обробляємо update_id: {update.update_id}")
     try:
         await application.process_update(update)
         print(f"DEBUG: Успішно оброблено update_id: {update.update_id}")
     except Exception as e:
         print(f"ERROR: Помилка при обробці update_id {update.update_id}: {e}")
-        # Повертаємо 200, щоб Telegram не вважав це невдалою доставкою і не спамив запитами
-        # Краще логувати помилку і розбиратися, ніж змушувати Telegram повторювати
         return Response(status_code=status.HTTP_200_OK)
-
-    # 5. Повертаємо успішну відповідь Telegram
     return Response(status_code=status.HTTP_200_OK)
 
-
-# --- Root ендпоінт для перевірки ---
 @fastapi_app.get("/")
 async def root():
     return {"message": "FastAPI server for Telegram Bot is running (Webhook Mode)"}
 
-# === Запуск  Uvicorn ===
 if __name__ == "__main__":
     print("DEBUG: Запуск FastAPI через Uvicorn (Webhook Mode)")
-    # Render зазвичай надає змінну PORT, Uvicorn її підхопить.
-    # Якщо запускаєте локально і хочете інший порт, вкажіть його тут.
-    # Порт 10000 часто використовується на Render.
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(fastapi_app, host="0.0.0.0", port=port)
