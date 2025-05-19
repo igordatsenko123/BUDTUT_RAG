@@ -12,6 +12,7 @@ from telegram.ext import (
     CommandHandler, ConversationHandler, ApplicationBuilder, ExtBot
 )
 from telegram.constants import ParseMode
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 # --- OpenAI ---
 from config import TELEGRAM_BOT_TOKEN, OPENAI_API_KEY
@@ -119,17 +120,63 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Призвіще?")
     return SURNAME
 
+
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"DEBUG: Получена фамилия: {update.message.text}")
+    print(f"DEBUG: Отримано прізвище: {update.message.text}")  # Змінив лог на українську
     context.user_data["surname"] = update.message.text
-    await update.message.reply_text("Телефон?")
+
+    # Створюємо клавіатуру з кнопкою "Поділитися номером телефону"
+    contact_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📱 Поділитися номером телефону", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True  # Клавіатура зникне після натискання або надсилання іншого повідомлення
+    )
+
+    await update.message.reply_text(
+        "Дякую. Тепер, будь ласка, поділіться вашим номером телефону, натиснувши кнопку нижче, або просто надішліть його мені текстовим повідомленням, якщо бажаєте.",
+        reply_markup=contact_keyboard
+    )
     return PHONE
 
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"DEBUG: Получен телефон: {update.message.text}")
-    context.user_data["phone"] = update.message.text
-    await update.message.reply_text("Спеціальність?")
+
+async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Для ручного введення
+    phone_text = update.message.text
+    print(f"DEBUG: Отримано телефон (текстом): {phone_text}")
+
+    # Тут можна додати валідацію номера, якщо потрібно
+    # Наприклад, перевірити, чи рядок схожий на номер телефону
+
+    context.user_data["phone"] = phone_text
+    await update.message.reply_text(
+        "Спеціальність?",
+        reply_markup=ReplyKeyboardRemove()  # Прибираємо будь-яку попередню клавіатуру
+    )
     return SPECIALTY
+
+
+async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    contact = update.message.contact
+    user_id = update.effective_user.id
+
+    # Важлива перевірка: користувач має поділитися СВОЇМ контактом
+    if contact.user_id != user_id:
+        await update.message.reply_text(
+            "Будь ласка, поділіться вашим власним контактом.",
+            # Можна знову надіслати клавіатуру для запиту контакту, якщо потрібно
+        )
+        # Залишаємося в тому ж стані, щоб дозволити повторну спробу або текстове введення
+        return PHONE
+
+    phone_number = contact.phone_number
+    print(f"DEBUG: Отримано контакт (через кнопку): {phone_number} від user_id={user_id}")
+    context.user_data["phone"] = phone_number
+
+    await update.message.reply_text(
+        f"Дякую, ваш номер {phone_number} збережено. Тепер вкажіть вашу спеціальність?",
+        reply_markup=ReplyKeyboardRemove()  # Прибираємо клавіатуру "Поділитися номером"
+    )
+    return SPECIALTY
+
 
 async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("DEBUG: Завершення анкети")
@@ -337,10 +384,14 @@ async def lifespan(app: FastAPI):
             MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Використовуємо 'update_profile' напряму
         ],
         states={
-            # Аналогічно для всіх функцій-обробників стану
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
+            # --- ОНОВЛЕНО СТАН PHONE ---
+            PHONE: [
+                MessageHandler(filters.CONTACT, process_contact_info), # Обробник для отриманого контакту
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)  # Обробник для текстового введення номера
+            ],
+            # --- КІНЕЦЬ ОНОВЛЕННЯ ---
             SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
         },
         fallbacks=[CommandHandler("cancel", cancel)], # Використовуємо 'cancel' напряму
