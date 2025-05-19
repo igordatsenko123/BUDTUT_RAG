@@ -323,36 +323,45 @@ async def lifespan(app: FastAPI):
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.state.telegram_app = application
 
-    from main_handlers import start, get_name, get_surname, get_phone, get_specialty, cancel
-    from main_handlers import show_profile, update_profile, handle_message, handle_voice
+    # --- ВИДАЛІТЬ ЦІ РЯДКИ ІМПОРТУ ---
+    # from main_handlers import start, get_name, get_surname, get_phone, get_specialty, cancel
+    # from main_handlers import show_profile, update_profile, handle_message, handle_voice
+    # --- КІНЕЦЬ ВИДАЛЕННЯ ---
+
+    # Оскільки функції start, get_name і т.д. визначені в цьому ж файлі,
+    # вони вже доступні тут за своїми іменами.
 
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler("start", start),
-            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
+            CommandHandler("start", start), # Використовуємо 'start' напряму
+            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Використовуємо 'update_profile' напряму
         ],
         states={
+            # Аналогічно для всіх функцій-обробників стану
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
             SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)], # Використовуємо 'cancel' напряму
         per_message=False
     )
     application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
-    application.add_handler(CommandHandler("profile", show_profile))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile)) # Використовуємо 'show_profile' напряму
+    application.add_handler(CommandHandler("profile", show_profile)) # Те саме
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice)) # Використовуємо 'handle_voice' напряму
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)) # Використовуємо 'handle_message' напряму
 
     await application.initialize()
     await application.start()
     try:
         print(f"DEBUG: Встановлюємо webhook на URL: {WEBHOOK_URL}")
+        # !!! ЗВЕРНІТЬ УВАГУ: Ви раніше використовували WEBHOOK_SECRET_TOKEN.
+        # Якщо він потрібен, його слід додати сюди.
         await application.bot.set_webhook(
             url=WEBHOOK_URL,
             allowed_updates=Update.ALL_TYPES
+            # secret_token=WEBHOOK_SECRET_TOKEN # Розкоментуйте, якщо використовуєте секретний токен
         )
         print("✅ Webhook встановлено успішно.")
     except Exception as e:
@@ -369,6 +378,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"ERROR: Не вдалося видалити webhook: {e}")
     await application.shutdown()
+
 
 # === FastAPI Додаток ===
 fastapi_app = FastAPI(lifespan=lifespan)
