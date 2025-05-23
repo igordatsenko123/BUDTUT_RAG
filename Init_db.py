@@ -1,13 +1,12 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime
+from sqlalchemy import Column, BigInteger, String, DateTime
 from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
-
 
 DATABASE_URL = os.getenv("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://")
 
@@ -16,8 +15,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, index=True)
-    tg_id = Column(BigInteger, unique=True, nullable=False)
+    tg_id = Column(BigInteger, primary_key=True, index=True)
     first_name = Column(String(255))
     last_name = Column(String(255))
     phone = Column(String(255))

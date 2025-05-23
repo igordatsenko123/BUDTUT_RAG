@@ -1,16 +1,18 @@
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, func
-from db import Base  # Base берётся из db.py
+from sqlalchemy import Column, BigInteger, String, DateTime
+from sqlalchemy.orm import declarative_base
+from datetime import datetime
+
+Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, index=True)
-    tg_id = Column(BigInteger, unique=True, nullable=False)
-    first_name = Column(String(255))
-    last_name = Column(String(255))
-    phone = Column(String(50))
-    speciality = Column(String(255))
-    experience = Column(String(255))
-    company = Column(String(255))
+    tg_id = Column(BigInteger, primary_key=True, index=True)  # <- заменяем user_id
+    first_name = Column(String)
+    last_name = Column(String)
+    phone = Column(String)
+    speciality = Column(String)
+    experience = Column(String)
+    company = Column(String)
     username = Column(String)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
