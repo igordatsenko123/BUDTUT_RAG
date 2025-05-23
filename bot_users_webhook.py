@@ -4,6 +4,9 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 import asyncio
+from crud import insert_or_update_user  # импорт новой функции
+
+
 
 # --- Telegram ---
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -41,7 +44,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 USER_FILE = "user_info.json"
 LOG_FILE = "chat_history.csv"
 
-NAME, SURNAME, PHONE, SPECIALTY = range(4)
+NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [[KeyboardButton("📋 Профіль")], [KeyboardButton("✏️ Оновити анкету")]],
@@ -179,42 +182,41 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Завершення анкети")
     context.user_data["specialty"] = update.message.text
-    user_id = str(update.effective_user.id)
+    await update.message.reply_text("Скільки у вас досвіду роботи (у роках або короткий опис)?")
+    return EXPERIENCE
 
-    user_info = {
-        "name": context.user_data["name"],
-        "surname": context.user_data["surname"],
-        "phone": context.user_data["phone"],
-        "specialty": context.user_data["specialty"]
-    }
+async def get_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["experience"] = update.message.text
+    await update.message.reply_text("Вкажіть назву компанії, в якій ви працюєте (або працювали):")
+    return COMPANY
+
+from crud import insert_or_update_user
+
+async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["company"] = update.message.text
+    tg_id = update.effective_user.id
 
     try:
-        if os.path.exists(USER_FILE):
-            with open(USER_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = {}
+        await insert_or_update_user(
+            tg_id=tg_id,
+            first_name=context.user_data.get("name"),
+            last_name=context.user_data.get("surname"),
+            phone=context.user_data.get("phone"),
+            speciality=context.user_data.get("specialty"),
+            experience=context.user_data.get("experience"),
+            company=context.user_data.get("company")
+        )
+        await update.message.reply_text("Дякую! Анкету збережено. Тепер давай продовжимо спілкування 😊", reply_markup=menu_keyboard)
+        print(f"DEBUG: Дані збережено для tg_id={tg_id}")
+    except Exception as e:
+        print(f"ERROR: Не вдалося зберегти анкету в базу для {tg_id}: {e}")
+        await update.message.reply_text("Вибач, сталася помилка при збереженні анкети.")
 
-        data[user_id] = user_info
-        with open(USER_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-
-        print(f"DEBUG: Анкета збережена для user_id={user_id}")
-        await update.message.reply_text("Дякую, тепер давай продовжимо спілкування 😊", reply_markup=menu_keyboard)
-    except (IOError, json.JSONDecodeError) as e:
-        print(f"ERROR: Не вдалося зберегти анкету для {user_id}: {e}")
-        await update.message.reply_text("Вибачте, сталася помилка при збереженні анкети.")
-
-    context.user_data.clear() # Очищуємо дані після збереження
+    context.user_data.clear()
     return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Анкета відхилена користувачем")
-    context.user_data.clear() # Очищуємо дані при відміні
-    await update.message.reply_text("Анкета відхилена.", reply_markup=menu_keyboard) # Показуємо меню
-    return ConversationHandler.END
+
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("DEBUG: Запит профілю")
@@ -393,6 +395,8 @@ async def lifespan(app: FastAPI):
             ],
             # --- КІНЕЦЬ ОНОВЛЕННЯ ---
             SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
         },
         fallbacks=[CommandHandler("cancel", cancel)], # Використовуємо 'cancel' напряму
         per_message=False
