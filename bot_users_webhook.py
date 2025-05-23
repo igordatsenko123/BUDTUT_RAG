@@ -41,8 +41,8 @@ if not TELEGRAM_BOT_TOKEN:
 if not OPENAI_API_KEY:
     raise ValueError("Не встановлено змінну OPENAI_API_KEY!")
 
-# WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
-WEBHOOK_URL_BASE="https://2b8e-176-37-33-23.ngrok-free.app"
+WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
+#WEBHOOK_URL_BASE="https://2b8e-176-37-33-23.ngrok-free.app"
 if not WEBHOOK_URL_BASE:
     raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE!")
 
