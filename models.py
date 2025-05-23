@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, func
 from db import Base  # Base берётся из db.py
 
 class User(Base):
@@ -12,3 +12,5 @@ class User(Base):
     speciality = Column(String(255))
     experience = Column(String(255))
     company = Column(String(255))
+    username = Column(String)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

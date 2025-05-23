@@ -4,7 +4,13 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 import asyncio
-from crud import insert_or_update_user  # импорт новой функции
+from db import SessionLocal
+from sqlalchemy import select
+from models import User
+import re
+from crud import insert_or_update_user
+
+
 
 
 
@@ -16,6 +22,9 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import CallbackQueryHandler
+from telegram import WebAppInfo
 
 # --- OpenAI ---
 from config import TELEGRAM_BOT_TOKEN, OPENAI_API_KEY
@@ -32,7 +41,8 @@ if not TELEGRAM_BOT_TOKEN:
 if not OPENAI_API_KEY:
     raise ValueError("Не встановлено змінну OPENAI_API_KEY!")
 
-WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
+# WEBHOOK_URL_BASE = os.environ.get("WEBHOOK_URL_BASE")
+WEBHOOK_URL_BASE="https://2b8e-176-37-33-23.ngrok-free.app"
 if not WEBHOOK_URL_BASE:
     raise ValueError("Не встановлено змінну середовища WEBHOOK_URL_BASE!")
 
@@ -41,13 +51,17 @@ WEBHOOK_URL = f"{WEBHOOK_URL_BASE}{WEBHOOK_PATH}"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-USER_FILE = "user_info.json"
+
 LOG_FILE = "chat_history.csv"
 
 NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
-    [[KeyboardButton("📋 Профіль")], [KeyboardButton("✏️ Оновити анкету")]],
+    [
+        [KeyboardButton("📋 Профіль")],
+        [KeyboardButton("✏️ Оновити анкету")],
+        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://your-webapp-url.com"))]
+    ],
     resize_keyboard=True
 )
 
@@ -77,19 +91,43 @@ def log_message(user_id, username, msg_id, msg_type, role, content):
     except Exception as e:
         print(f"ERROR: Помилка при логуванні: {e}")
 
+async def handle_user_question_with_thinking(update: Update, context: ContextTypes.DEFAULT_TYPE, get_answer_func):
+    """
+    Обрабатывает вопрос пользователя с отложенным сообщением "Степанич думає...",
+    если ответ не отправлен в течение 5 секунд.
+    """
+    question = update.message.text
+
+    async def send_thinking_message():
+        await asyncio.sleep(5)
+        if not response_event.is_set():
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Степанич думає...",
+                parse_mode=ParseMode.HTML
+            )
+
+    async def get_answer_and_respond():
+        try:
+            answer = get_answer_func(question)
+            await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            await update.message.reply_text("Вибач, сталася помилка при обробці запиту.")
+        finally:
+            response_event.set()
+
+    response_event = asyncio.Event()
+    await asyncio.gather(
+        send_thinking_message(),
+        get_answer_and_respond()
+    )
+
 # === Перевірка реєстрації ===
-def is_registered(user_id):
-    print(f"DEBUG: Перевіряємо реєстрацію user_id={user_id}")
-    if not os.path.exists(USER_FILE):
-        return False
-    try:
-        with open(USER_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return str(user_id) in data
-    except (FileNotFoundError, json.JSONDecodeError):
-        return False
-
-
+async def is_registered(user_id: int) -> bool:
+    async with SessionLocal() as session:
+        result = await session.execute(select(User).where(User.tg_id == user_id))
+        user = result.scalar_one_or_none()
+        return user is not None
 
 # === Анкета та Обробники (Ваш код без змін) ===
 # Тут йдуть ваші функції: start, get_name, get_surname, get_phone,
@@ -99,20 +137,28 @@ def is_registered(user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
-    if is_registered(user_id):
+
+    if await is_registered(user_id):
         try:
-            with open(USER_FILE, "r", encoding="utf-8") as f:
-                name = json.load(f)[str(user_id)]["name"]
+            async with SessionLocal() as session:
+                result = await session.execute(select(User).where(User.tg_id == user_id))
+                user = result.scalar_one_or_none()
+
+                if user and user.first_name:
+                    await update.message.reply_text(
+                        f"З поверненням, {user.first_name}!\nГотовий відповідати на твої запитання:",
+                        reply_markup=menu_keyboard
+                    )
+                    return ConversationHandler.END
+                else:
+                    raise ValueError("Дані користувача не знайдено")
+
+        except Exception as e:
+            print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
             await update.message.reply_text(
-                f"З поверненням, {name}!\nГотовий відповідати на твої запитання:",
-                reply_markup=menu_keyboard
+                "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?"
             )
-        except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-             print(f"ERROR: Помилка читання профілю для {user_id}: {e}")
-             # Якщо профіль не знайдено, можливо, файл пошкоджено, починаємо знову
-             await update.message.reply_text("Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?")
-             return NAME
-        return ConversationHandler.END
+            return NAME
     else:
         await update.message.reply_text("Привіт! Давай для початку познайомимося. Як тебе звати?")
         return NAME
@@ -123,38 +169,57 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Призвіще?")
     return SURNAME
 
-
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"DEBUG: Отримано прізвище: {update.message.text}")  # Змінив лог на українську
     context.user_data["surname"] = update.message.text
 
-    # Створюємо клавіатуру з кнопкою "Поділитися номером телефону"
     contact_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("📱 Поділитися номером телефону", request_contact=True)]],
         resize_keyboard=True,
-        one_time_keyboard=True  # Клавіатура зникне після натискання або надсилання іншого повідомлення
+        one_time_keyboard=True
     )
 
     await update.message.reply_text(
-        "Дякую. Тепер, будь ласка, поділіться вашим номером телефону, натиснувши кнопку нижче, або просто надішліть його мені текстовим повідомленням, якщо бажаєте.",
-        reply_markup=contact_keyboard
+        "Дякую. Тепер, будь ласка, поділіться номером телефону або введіть його вручну у форматі:\n"
+        "`+380 (XX) XXX XX XX`",
+        reply_markup=contact_keyboard,
+        parse_mode=ParseMode.MARKDOWN
     )
     return PHONE
 
 
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Для ручного введення
-    phone_text = update.message.text
-    print(f"DEBUG: Отримано телефон (текстом): {phone_text}")
+async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw_phone = update.message.text.strip()
+    print(f"DEBUG: Отримано телефон (текстом): {raw_phone}")
 
-    # Тут можна додати валідацію номера, якщо потрібно
-    # Наприклад, перевірити, чи рядок схожий на номер телефону
+    # Видаляємо всі символи, крім цифр
+    digits_only = re.sub(r"\D", "", raw_phone)
 
-    context.user_data["phone"] = phone_text
+    # Нормалізуємо номер:
+    if digits_only.startswith("0") and len(digits_only) == 10:
+        normalized = "+380" + digits_only[1:]
+    elif digits_only.startswith("380") and len(digits_only) == 12:
+        normalized = "+" + digits_only
+    elif digits_only.startswith("67") or digits_only.startswith("68") or digits_only.startswith("50") or digits_only.startswith("63"):
+        # Без коду країни — вважаємо валідним
+        normalized = "+380" + digits_only
+    else:
+        await update.message.reply_text(
+            "⚠️ Невірний формат номеру.\n"
+            "Приклад коректного номеру: `+380 (67) 123 45 67`, `0671234567`, або `67 123 45 67`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return PHONE
+
+    context.user_data["phone"] = normalized
+    print(f"DEBUG: Нормалізований номер: {normalized}")
+
     await update.message.reply_text(
         "Спеціальність?",
-        reply_markup=ReplyKeyboardRemove()  # Прибираємо будь-яку попередню клавіатуру
+        reply_markup=ReplyKeyboardRemove()
     )
-    return SPECIALTY
+    return await ask_specialty(update, context)
+
+
 
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,25 +243,83 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
         f"Дякую, ваш номер {phone_number} збережено. Тепер вкажіть вашу спеціальність?",
         reply_markup=ReplyKeyboardRemove()  # Прибираємо клавіатуру "Поділитися номером"
     )
+    return await ask_specialty(update, context)
+
+async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
+        [InlineKeyboardButton("Монтажник", callback_data="spec:Монтажник")],
+        [InlineKeyboardButton("Слюсар", callback_data="spec:Слюсар")],
+        [InlineKeyboardButton("Череззаборногуперкидатор", callback_data="spec:Череззаборногуперкидатор")],
+        [InlineKeyboardButton("Роздолбай", callback_data="spec:Роздолбай")],
+        [InlineKeyboardButton("Інша спеціальність", callback_data="spec:other")]
+    ])
+
+    await update.message.reply_text(
+        "Виберіть свою спеціальність:",
+        reply_markup=keyboard
+    )
     return SPECIALTY
 
+async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
 
-async def get_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["specialty"] = update.message.text
-    await update.message.reply_text("Скільки у вас досвіду роботи (у роках або короткий опис)?")
+    if data.startswith("spec:"):
+        specialty = data.replace("spec:", "")
+        if specialty == "other":
+            await query.edit_message_text("✏️ Напишіть вручну вашу спеціальність:")
+            return SPECIALTY  # Ждем текстовое сообщение
+        else:
+            context.user_data["specialty"] = specialty
+            await query.edit_message_text(f"✅ Спеціальність: {specialty}")
+            return await ask_experience(update, context)
+
+async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    specialty = update.message.text.strip()
+    context.user_data["specialty"] = specialty
+    await update.message.reply_text(f"✅ Спеціальність збережено: {specialty}")
+    return await ask_experience(update, context)
+
+
+async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("0–2 роки", callback_data="exp:0-2"),
+         InlineKeyboardButton("3–5 років", callback_data="exp:3-5")],
+        [InlineKeyboardButton("6–10 років", callback_data="exp:6-10"),
+         InlineKeyboardButton("11+ років", callback_data="exp:11+")],
+    ])
+
+    chat = update.effective_chat
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text="Скільки у вас досвіду роботи?",
+        reply_markup=keyboard
+    )
     return EXPERIENCE
 
-async def get_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["experience"] = update.message.text
-    await update.message.reply_text("Вкажіть назву компанії, в якій ви працюєте (або працювали):")
-    return COMPANY
 
-from crud import insert_or_update_user
+
+async def handle_experience_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    if data.startswith("exp:"):
+        experience = data.split(":")[1]
+        context.user_data["experience"] = experience
+
+        await query.edit_message_text(f"✅ Досвід: {experience} років")
+        await query.message.reply_text("Вкажіть назву компанії, в якій ви працюєте (або працювали):")
+        return COMPANY
+
+
 
 async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["company"] = update.message.text
     tg_id = update.effective_user.id
-
+    user_obj = update.effective_user
     try:
         await insert_or_update_user(
             tg_id=tg_id,
@@ -205,7 +328,9 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
             phone=context.user_data.get("phone"),
             speciality=context.user_data.get("specialty"),
             experience=context.user_data.get("experience"),
-            company=context.user_data.get("company")
+            company=context.user_data.get("company"),
+            username=user_obj.username,
+            updated_at=datetime.utcnow()
         )
         await update.message.reply_text("Дякую! Анкету збережено. Тепер давай продовжимо спілкування 😊", reply_markup=menu_keyboard)
         print(f"DEBUG: Дані збережено для tg_id={tg_id}")
@@ -216,115 +341,111 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
-
-
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("DEBUG: Запит профілю")
-    user_id = str(update.effective_user.id)
-    if not is_registered(user_id):
-        await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-        return ConversationHandler.END # Повертаємо, щоб вийти з можливого діалогу
+    tg_id = update.effective_user.id
 
     try:
-        with open(USER_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        user = data[user_id]
-        profile_text = (
-            f"👤 *Твоя анкета:*\n"
-            f"Ім'я: {user.get('name', 'N/A')}\n"
-            f"Призвіще: {user.get('surname', 'N/A')}\n"
-            f"Телефон: {user.get('phone', 'N/A')}\n"
-            f"Спеціальність: {user.get('specialty', 'N/A')}"
-        )
-        await update.message.reply_text(profile_text, parse_mode=ParseMode.MARKDOWN_V2) # Використовуємо константу
-    except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-        print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
-        await update.message.reply_text("Вибачте, не вдалося завантажити ваш профіль.")
-    # Не повертаємо стан, бо це не частина діалогу заповнення анкети
+        async with SessionLocal() as session:
+            result = await session.execute(select(User).where(User.tg_id == tg_id))
+            user = result.scalar_one_or_none()
+
+            if user is None:
+                await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
+                return ConversationHandler.END
+
+            profile_text = (
+                f"👤 <b>Твоя анкета:</b>\n"
+                f"<b>Ім'я:</b> {user.first_name or 'N/A'}\n"
+                f"<b>Призвіще:</b> {user.last_name or 'N/A'}\n"
+                f"<b>Телефон:</b> {user.phone or 'N/A'}\n"
+                f"<b>Спеціальність:</b> {user.speciality or 'N/A'}\n"
+                f"<b>Досвід:</b> {user.experience or 'N/A'}\n"
+                f"<b>Компанія:</b> {user.company or 'N/A'}"
+            )
+
+            await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
+
+    except Exception as e:
+        print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
+        await update.message.reply_text("Вибачте, сталася помилка при завантаженні профілю.")
+
+
+
 
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not is_registered(user_id):
-         await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-         return ConversationHandler.END # Виходимо, якщо не зареєстрований
+    if not await is_registered(user_id):
+        await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
+        return ConversationHandler.END
 
     print("DEBUG: Оновлення профілю")
     await update.message.reply_text("Оновимо анкету. Як тебе звати?")
-    return NAME # Починаємо діалог оновлення
+    return NAME
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text("Анкету скасовано.", reply_markup=menu_keyboard)
+    return ConversationHandler.END
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Цей хендлер обробляє текст, який НЕ є командою І НЕ оброблений ConversationHandler або іншими MessageHandler (Regex)
     if not update.message or not update.message.text:
-        return # Ігноруємо порожні повідомлення
+        return
 
     print("🚀 Отримано текстове повідомлення:", update.message.text)
     user_id = update.effective_user.id
     text = update.message.text
 
-    # --- Перевірка кнопок меню (дублювання з реєстрації хендлерів, можна прибрати, якщо хендлери налаштовані коректно) ---
-    # Цей блок може бути необов'язковим, якщо Regex хендлери працюють стабільно
     if text == "📋 Профіль":
         return await show_profile(update, context)
-    # Обробка "✏️ Обновить анкету" ініціюється через ConversationHandler, тут не потрібна
 
-    # --- Перевірка реєстрації ---
-    if not is_registered(user_id):
+    if not await is_registered(user_id):
         await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
-        return # Немає стану для повернення, бо це не ConversationHandler
+        return
 
-    # --- Обробка повідомлення через QA Engine ---
     user = update.effective_user
-    username = user.username or user.first_name # Використовуємо ім'я, якщо немає username
+    username = user.username or user.first_name
     log_message(user.id, username, update.message.message_id, "text", "question", text)
 
     try:
-        # Припускаємо, що qa_engine існує і функція get_answer є
         from qa_engine import get_answer
-        answer = get_answer(text) # Переконайтесь, що ця функція існує і працює
-        print("💬 Відповідь бота:", answer)
-        log_message(user.id, username, update.message.message_id, "text", "answer", answer)
-        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
+        await handle_user_question_with_thinking(update, context, get_answer)
     except ImportError:
-         print("ERROR: Модуль qa_engine не знайдено!")
-         await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
+        print("ERROR: Модуль qa_engine не знайдено!")
+        await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
     except Exception as e:
         print(f"ERROR: Помилка при отриманні відповіді від qa_engine: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при обробці вашого запиту.")
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Ваш код handle_voice без змін, але переконайтеся, що ffmpeg встановлено на Render
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
-    if not is_registered(user_id):
+    if not await is_registered(user_id):
         await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
         return
 
     voice = update.message.voice
     user = update.message.from_user
-    username = user.username or user.first_name # Використовуємо ім'я, якщо немає username
+    username = user.username or user.first_name
 
-    input_ogg = f"voice_{user_id}.ogg" # Додаємо user_id для унікальності
+    input_ogg = f"voice_{user_id}.ogg"
     output_wav = f"voice_{user_id}.wav"
 
     try:
-        # Завантажуємо файл
         file = await context.bot.get_file(voice.file_id)
         await file.download_to_drive(input_ogg)
         print(f"DEBUG: Voice file downloaded to {input_ogg}")
 
-        # Конвертуємо через ffmpeg
         print("DEBUG: Конвертація через ffmpeg")
         process = subprocess.run(
-            ["ffmpeg", "-y", "-i", input_ogg, "-acodec", "pcm_s16le", "-ar", "16000", output_wav], # Додано параметри для кращої сумісності з Whisper
+            ["ffmpeg", "-y", "-i", input_ogg, "-acodec", "pcm_s16le", "-ar", "16000", output_wav],
             capture_output=True, text=True, check=True
         )
         print("DEBUG: ffmpeg stdout:", process.stdout)
         print("DEBUG: ffmpeg stderr:", process.stderr)
         print(f"DEBUG: Converted file saved to {output_wav}")
 
-
-        # Розпізнаємо через Whisper
         with open(output_wav, "rb") as f:
             print("DEBUG: Отправка в Whisper API")
             response = client.audio.transcriptions.create(model="whisper-1", file=f)
@@ -333,12 +454,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         log_message(user.id, username, update.message.message_id, "voice", "question", recognized_text)
 
-        # Отримуємо відповідь
-        from qa_engine import get_answer # Переконайтесь, що імпорт тут доречний або зробіть його глобальним
-        answer = get_answer(recognized_text)
-        log_message(user.id, username, update.message.message_id, "voice", "answer", answer)
-        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
-
+        from qa_engine import get_answer
+        await handle_user_question_with_thinking(update, context, get_answer)
     except FileNotFoundError:
         print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
         await update.message.reply_text("Помилка обробки аудіо: ffmpeg не знайдено.")
@@ -348,13 +465,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"ERROR: ffmpeg stderr: {e.stderr}")
         await update.message.reply_text("Не вдалося обробити голосове повідомлення (помилка конвертації).")
     except ImportError:
-         print("ERROR: Модуль qa_engine не знайдено!")
-         await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
+        print("ERROR: Модуль qa_engine не знайдено!")
+        await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
     except Exception as e:
         print(f"ERROR: Помилка під час обробки голосового повідомлення: {e}")
         await update.message.reply_text("Виникла помилка під час обробки вашого голосового запиту.")
     finally:
-        # Гарантовано видаляємо тимчасові файли
         for fpath in [input_ogg, output_wav]:
             if os.path.exists(fpath):
                 try:
@@ -362,7 +478,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
-
 
 
 # --- Lifespan для ініціалізації та зупинки бота ---
@@ -383,6 +498,7 @@ async def lifespan(app: FastAPI):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start), # Використовуємо 'start' напряму
+            CommandHandler("update_profile", update_profile),
             MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Використовуємо 'update_profile' напряму
         ],
         states={
@@ -394,8 +510,9 @@ async def lifespan(app: FastAPI):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)  # Обробник для текстового введення номера
             ],
             # --- КІНЕЦЬ ОНОВЛЕННЯ ---
-            SPECIALTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_specialty)],
-            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)],
+            EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
             COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
         },
         fallbacks=[CommandHandler("cancel", cancel)], # Використовуємо 'cancel' напряму
@@ -406,6 +523,8 @@ async def lifespan(app: FastAPI):
     application.add_handler(CommandHandler("profile", show_profile)) # Те саме
     application.add_handler(MessageHandler(filters.VOICE, handle_voice)) # Використовуємо 'handle_voice' напряму
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)) # Використовуємо 'handle_message' напряму
+    application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
+    application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
 
     await application.initialize()
     await application.start()
