@@ -71,7 +71,7 @@ async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     await update.message.reply_text(
-        text="‎",  # невидимый символ
+        text=".",  # невидимый символ
         reply_markup=menu_keyboard
     )
 
