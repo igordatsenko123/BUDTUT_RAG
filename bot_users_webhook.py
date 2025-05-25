@@ -58,9 +58,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📋 Профіль")],
-        [KeyboardButton("✏️ Оновити анкету")],
-        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://your-webapp-url.com"))]
+        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/"))]
     ],
     resize_keyboard=True
 )
