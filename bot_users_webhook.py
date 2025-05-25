@@ -56,12 +56,12 @@ LOG_FILE = "chat_history.csv"
 
 NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
-#menu_keyboard = ReplyKeyboardMarkup(
-#    [
-#        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]
-#    ],
-#    resize_keyboard=True
-#)
+menu_keyboard = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]
+    ],
+    resize_keyboard=True
+)
 
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Удаляем старую клавиатуру
