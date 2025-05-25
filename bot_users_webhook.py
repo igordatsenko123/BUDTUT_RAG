@@ -56,12 +56,30 @@ LOG_FILE = "chat_history.csv"
 
 NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
-menu_keyboard = ReplyKeyboardMarkup(
-    [
-        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]
-    ],
-    resize_keyboard=True
-)
+#menu_keyboard = ReplyKeyboardMarkup(
+#    [
+#        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]
+#    ],
+#    resize_keyboard=True
+#)
+
+async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Удаляем старую клавиатуру
+    await update.message.reply_text(
+        "🔄 Оновлюю меню...",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    # Добавляем новую клавиатуру с WebApp
+    menu_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]],
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "👇 Ось твоє оновлене меню:",
+        reply_markup=menu_keyboard
+    )
 
 print("DEBUG: Імпорти завершені")
 print(f"DEBUG: Webhook URL буде встановлено на: {WEBHOOK_URL}")
@@ -147,6 +165,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"З поверненням, {user.first_name}!\nГотовий відповідати на твої запитання:",
                         reply_markup=menu_keyboard
                     )
+                    await send_menu_keyboard(update, context)
                     return ConversationHandler.END
                 else:
                     raise ValueError("Дані користувача не знайдено")
@@ -523,6 +542,7 @@ async def lifespan(app: FastAPI):
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)) # Використовуємо 'handle_message' напряму
     application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
     application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
+    application.add_handler(CommandHandler("start", start))
 
     await application.initialize()
     await application.start()
