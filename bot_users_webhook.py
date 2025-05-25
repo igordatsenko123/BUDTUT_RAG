@@ -64,20 +64,14 @@ menu_keyboard = ReplyKeyboardMarkup(
 )
 
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Удаляем старую клавиатуру
-    await update.message.reply_text(
-        "🔄 Оновлюю меню...",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-    # Добавляем новую клавиатуру с WebApp
     menu_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]],
+        [[KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(
+            url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]],
         resize_keyboard=True
     )
 
     await update.message.reply_text(
-        "👇 Ось твоє оновлене меню:",
+        text="‎",  # невидимый символ
         reply_markup=menu_keyboard
     )
 
