@@ -58,7 +58,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]
+        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]
     ],
     resize_keyboard=True
 )
@@ -66,7 +66,7 @@ menu_keyboard = ReplyKeyboardMarkup(
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     menu_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(
-            url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=6"))]],
+            url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]],
         resize_keyboard=True
     )
 
