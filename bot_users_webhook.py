@@ -60,6 +60,13 @@ menu_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+async def ensure_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update.message.reply_text("Оновлюю меню…", reply_markup=ReplyKeyboardRemove())
+        await asyncio.sleep(0.2)  # даём Telegram немного времени очистить клавиатуру
+        await send_menu_keyboard(update, context)
+    except Exception as e:
+        print(f"ERROR: Не вдалося оновити клавіатуру: {e}")
 
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     menu_keyboard = ReplyKeyboardMarkup(
@@ -183,7 +190,7 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
         f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪\n"
-        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.\n\n"
+        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.\n"
         "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
@@ -215,7 +222,7 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: Нормалізований номер: {normalized}")
 
     await update.message.reply_text(
-        f"✅ Ваш номер <b>{normalized}</b> збережено",
+        f"✅ Твій номер <b>{normalized}</b> збережено",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode=ParseMode.HTML
     )
@@ -227,7 +234,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
 
     if contact.user_id != user_id:
-        await update.message.reply_text("Будь ласка, поділіться вашим власним контактом.")
+        await update.message.reply_text("Будь ласка, поділись своїм власним контактом.")
         return PHONE
 
     phone_number = contact.phone_number
@@ -243,7 +250,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         print("⚠️ Невірний номер після обробки:", digits_only)
         await update.message.reply_text(
-            "⚠️ Виникла проблема з номером телефону. Введіть його вручну у форматі: <code>+380XXXXXXXXX</code>",
+            "⚠️ Виникла проблема з номером телефону. Введи його вручну у форматі: <code>+380XXXXXXXXX</code>",
             parse_mode=ParseMode.HTML
         )
         return PHONE
@@ -251,7 +258,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["phone"] = normalized
 
     await update.message.reply_text(
-        f"Дякую, ваш номер <b>{html.escape(normalized)}</b> збережено. Обери свою спеціальність",
+        f"Дякую, твій номер <b>{html.escape(normalized)}</b> збережено",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode=ParseMode.HTML
     )
@@ -280,7 +287,7 @@ async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAU
     if data.startswith("spec:"):
         specialty = data.replace("spec:", "")
         if specialty == "other":
-            await query.edit_message_text("✏️ Напишіть вручну вашу спеціальність:")
+            await query.edit_message_text("✏️ Напиши вручну свою спеціальність:")
             return SPECIALTY
         else:
             context.user_data["specialty"] = specialty
@@ -293,13 +300,13 @@ async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_
     # Базовая валидация
     if not specialty or len(specialty) < 2 or any(c in specialty for c in "!@#$%^&*(){}[]<>"):
         await update.message.reply_text(
-            "⚠️ Введіть коректну спеціальність (не менше 2 літер, без спецсимволів)."
+            "⚠️ Введ коректну спеціальність (не менше 2 літер, без спецсимволів)."
         )
         return SPECIALTY
 
     if specialty in ["📋 Профіль", "✏️ Оновити анкету"]:
         await update.message.reply_text(
-            "⚠️ Це виглядає як кнопка. Введіть свою спеціальність вручну."
+            "⚠️ Це виглядає як кнопка. Введи свою спеціальність вручну."
         )
         return SPECIALTY
 
@@ -353,7 +360,7 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     company = update.message.text.strip()
 
     if not company or len(company) < 2 or company in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text("⚠️ Введіть коректну назву компанії.")
+        await update.message.reply_text("⚠️ Введи коректну назву компанії.")
         return COMPANY
 
     context.user_data["company"] = company
@@ -416,10 +423,13 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
+            await ensure_menu_keyboard(update, context)
+
 
     except Exception as e:
         print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при завантаженні профілю.")
+
 
 
 
@@ -473,6 +483,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from qa_engine import get_answer
         await handle_user_question_with_thinking(update, context, get_answer)
+        await ensure_menu_keyboard(update, context)
+
     except ImportError:
         print("ERROR: Модуль qa_engine не знайдено!")
         await update.message.reply_text("Вибачте, мій модуль відповідей зараз недоступний.")
@@ -519,6 +531,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         from qa_engine import get_answer
         await handle_user_question_with_thinking(update, context, get_answer)
+        await ensure_menu_keyboard(update, context)
     except FileNotFoundError:
         print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
         await update.message.reply_text("Помилка обробки аудіо: ffmpeg не знайдено.")
