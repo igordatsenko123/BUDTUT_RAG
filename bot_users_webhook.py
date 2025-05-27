@@ -9,10 +9,7 @@ from sqlalchemy import select
 from models import User
 import re
 from crud import insert_or_update_user
-
-
-
-
+import html
 
 # --- Telegram ---
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -102,36 +99,7 @@ def log_message(user_id, username, msg_id, msg_type, role, content):
     except Exception as e:
         print(f"ERROR: Помилка при логуванні: {e}")
 
-async def handle_user_question_with_thinking(update: Update, context: ContextTypes.DEFAULT_TYPE, get_answer_func):
-    """
-    Обрабатывает вопрос пользователя с отложенным сообщением "Степанич думає...",
-    если ответ не отправлен в течение 5 секунд.
-    """
-    question = update.message.text
 
-    async def send_thinking_message():
-        await asyncio.sleep(5)
-        if not response_event.is_set():
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Степанич думає...",
-                parse_mode=ParseMode.HTML
-            )
-
-    async def get_answer_and_respond():
-        try:
-            answer = get_answer_func(question)
-            await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
-        except Exception as e:
-            await update.message.reply_text("Вибач, сталася помилка при обробці запиту.")
-        finally:
-            response_event.set()
-
-    response_event = asyncio.Event()
-    await asyncio.gather(
-        send_thinking_message(),
-        get_answer_and_respond()
-    )
 
 # === Перевірка реєстрації ===
 async def is_registered(user_id: int) -> bool:
@@ -150,7 +118,6 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Можеш залишити звернення в нашій групі підтримки:\nhttps://t.me/ai_safety_coach_support"
     )
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -163,8 +130,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if user and user.first_name:
                     await update.message.reply_text(
-                        f"З поверненням, {user.first_name}!\nГотовий відповідати на твої запитання:",
-                        reply_markup=menu_keyboard
+                        f"З поверненням, <b>{html.escape(user.first_name)}</b>!<br>Готовий відповідати на твої запитання:",
+                        reply_markup=menu_keyboard,
+                        parse_mode=ParseMode.HTML
                     )
                     await send_menu_keyboard(update, context)
                     return ConversationHandler.END
@@ -174,15 +142,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
             await update.message.reply_text(
-                "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?",
-                reply_markup=ReplyKeyboardRemove()
+                "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?"
             )
             return NAME
-
     else:
         await update.message.reply_text(
-            "Привіт! Я твій помічник з безпеки праці ⛑️. Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊\nНапиши своє імʼя:",
-            reply_markup=ReplyKeyboardRemove()
+            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊<br>Напиши своє імʼя",
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode=ParseMode.HTML
         )
         return NAME
 
@@ -191,13 +158,11 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text.strip()
 
     if name in ["📋 Профіль", "✏️ Оновити анкету"] or len(name) < 2:
-        await update.message.reply_text("⚠️ Введіть справжнє ім’я.")
+        await update.message.reply_text("⚠️ Введіть справжнє імʼя.")
         return NAME
 
-    print(f"DEBUG: Получено имя: {name}")
     context.user_data["name"] = name
-
-    await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Прізвище?", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -217,8 +182,8 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
-        f"Радий знайомству, <b>{user_name}</b>! Давай далі 💪<br>"
-        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.<br><br>"
+        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪<br>"
+        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.<br><br>"
         "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
@@ -262,16 +227,13 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
 
     if contact.user_id != user_id:
-        await update.message.reply_text(
-            "Будь ласка, поділіться <b>вашим власним</b> контактом.",
-            parse_mode=ParseMode.HTML
-        )
+        await update.message.reply_text("Будь ласка, поділіться вашим власним контактом.")
         return PHONE
 
     phone_number = contact.phone_number
     print(f"DEBUG: Отримано контакт (через кнопку): {phone_number} від user_id={user_id}")
 
-    digits_only = re.sub(r"\D", "", phone_number)
+    digits_only = re.sub(r"\\D", "", phone_number)
     if digits_only.startswith("380") and len(digits_only) == 12:
         normalized = "+" + digits_only
     elif len(digits_only) == 10 and digits_only.startswith("0"):
@@ -281,8 +243,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         print("⚠️ Невірний номер після обробки:", digits_only)
         await update.message.reply_text(
-            "⚠️ <b>Виникла проблема з номером телефону.</b><br>"
-            "Введіть його вручну у форматі: <code>+380XXXXXXXXX</code>",
+            "⚠️ Виникла проблема з номером телефону. Введіть його вручну у форматі: <code>+380XXXXXXXXX</code>",
             parse_mode=ParseMode.HTML
         )
         return PHONE
@@ -290,13 +251,11 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["phone"] = normalized
 
     await update.message.reply_text(
-        f"✅ Ваш номер <b>{normalized}</b> збережено",
+        f"Дякую, ваш номер <b>{html.escape(normalized)}</b> збережено. Обери свою спеціальність",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode=ParseMode.HTML
     )
     return await ask_specialty(update, context)
-
-
 
 async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
@@ -322,10 +281,10 @@ async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAU
         specialty = data.replace("spec:", "")
         if specialty == "other":
             await query.edit_message_text("✏️ Напишіть вручну вашу спеціальність:")
-            return SPECIALTY  # Ждем текстовое сообщение
+            return SPECIALTY
         else:
             context.user_data["specialty"] = specialty
-            await query.edit_message_text(f"✅ Спеціальність: {specialty}")
+            await query.edit_message_text(f"✅ Спеціальність: <b>{html.escape(specialty)}</b>", parse_mode=ParseMode.HTML)
             return await ask_experience(update, context)
 
 async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -333,15 +292,22 @@ async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_
 
     # Базовая валидация
     if not specialty or len(specialty) < 2 or any(c in specialty for c in "!@#$%^&*(){}[]<>"):
-        await update.message.reply_text("⚠️ Введіть коректну спеціальність (не менше 2 літер, без спецсимволів).")
+        await update.message.reply_text(
+            "⚠️ Введіть коректну спеціальність (не менше 2 літер, без спецсимволів)."
+        )
         return SPECIALTY
 
     if specialty in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text("⚠️ Це виглядає як кнопка. Введіть свою спеціальність вручну.")
+        await update.message.reply_text(
+            "⚠️ Це виглядає як кнопка. Введіть свою спеціальність вручну."
+        )
         return SPECIALTY
 
     context.user_data["specialty"] = specialty
-    await update.message.reply_text(f"✅ Спеціальність збережено: {specialty}")
+    await update.message.reply_text(
+        f"✅ Спеціальність збережено: <b>{html.escape(specialty)}</b>",
+        parse_mode=ParseMode.HTML
+    )
     return await ask_experience(update, context)
 
 
@@ -357,13 +323,11 @@ async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = context.user_data.get("name", "друже")
     await context.bot.send_message(
         chat_id=chat.id,
-        text=f"Чудово, <b>{user_name}</b>! Ще трошки! 🤗<br>Скільки років ти працюєш за спеціальністю?",
+        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗<br>Скільки років ти працюєш за спеціальністю?",
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML
     )
     return EXPERIENCE
-
-
 
 async def handle_experience_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -379,8 +343,10 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
             return EXPERIENCE
 
         context.user_data["experience"] = experience
-        await query.edit_message_text(f"✅ Досвід: {experience} років")
-        await query.message.reply_text("Майже все. Просто вкажи назву компанії, в якій ти працюєш (або працював):")
+        await query.edit_message_text(f"✅ Досвід: <b>{html.escape(experience)}</b> років", parse_mode=ParseMode.HTML)
+        await query.message.reply_text(
+            "Майже все. Просто вкажи назву компанії, в якій ти працюєш (або працював):"
+        )
         return COMPANY
 
 async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -411,7 +377,7 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✅ Анкету збережено!<br><br>"
             "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
             "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.<br><br>"
-            "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>! 🫡",
+            "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
             reply_markup=menu_keyboard,
             parse_mode=ParseMode.HTML
         )
@@ -424,8 +390,6 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.clear()
     return ConversationHandler.END
-
-
 
 
 
@@ -475,6 +439,17 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Анкету скасовано.", reply_markup=menu_keyboard)
     return ConversationHandler.END
+
+async def handle_user_question_with_thinking(update: Update, context: ContextTypes.DEFAULT_TYPE, get_answer_func):
+
+    question = update.message.text
+
+    try:
+        answer = get_answer_func(question)
+        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await update.message.reply_text("Вибач, сталася помилка при обробці запиту.")
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -566,6 +541,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
+
 
 from telegram import BotCommand
 
