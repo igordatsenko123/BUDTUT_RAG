@@ -58,14 +58,15 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]
+        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]
     ],
     resize_keyboard=True
 )
 
+
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     menu_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📚 Навчальний курс", web_app=WebAppInfo(
+        [[KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(
             url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]],
         resize_keyboard=True
     )
@@ -139,11 +140,17 @@ async def is_registered(user_id: int) -> bool:
         user = result.scalar_one_or_none()
         return user is not None
 
-# === Анкета та Обробники (Ваш код без змін) ===
+# === Анкета та Обробники
 # Тут йдуть ваші функції: start, get_name, get_surname, get_phone,
-# get_specialty, cancel, show_profile, update_profile, handle_message, handle_voice
 # Важливо: Вони мають бути визначені ДО того, як вони додаються як хендлери в lifespan
-# (Код функцій з вашого попереднього повідомлення сюди)
+
+from telegram import ReplyKeyboardRemove
+
+async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Можеш залишити звернення в нашій групі підтримки:\nhttps://t.me/ai_safety_coach_support"
+    )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -167,21 +174,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
             await update.message.reply_text(
-                "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?"
+                "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?",
+                reply_markup=ReplyKeyboardRemove()
             )
             return NAME
+
     else:
-        await update.message.reply_text("Привіт! Давай для початку познайомимося. Як тебе звати?")
+        await update.message.reply_text(
+            "Привіт! Я твій помічник з безпеки праці ⛑️. Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊\nНапиши своє імʼя:",
+            reply_markup=ReplyKeyboardRemove()
+        )
         return NAME
 
+
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"DEBUG: Получено имя: {update.message.text}")
-    context.user_data["name"] = update.message.text
-    await update.message.reply_text("Призвіще?")
+    name = update.message.text.strip()
+
+    if name in ["📋 Профіль", "✏️ Оновити анкету"] or len(name) < 2:
+        await update.message.reply_text("⚠️ Введіть справжнє ім’я.")
+        return NAME
+
+    print(f"DEBUG: Получено имя: {name}")
+    context.user_data["name"] = name
+
+    await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["surname"] = update.message.text
+    surname = update.message.text.strip()
+
+    if surname in ["📋 Профіль", "✏️ Оновити анкету"] or len(surname) < 2:
+        await update.message.reply_text("⚠️ Введіть справжнє прізвище.")
+        return SURNAME
+
+    context.user_data["surname"] = surname
 
     contact_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("📱 Поділитися номером телефону", request_contact=True)]],
@@ -189,11 +215,13 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
         one_time_keyboard=True
     )
 
+    user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
-        "Дякую. Тепер, будь ласка, поділіться номером телефону або введіть його вручну у форматі:\n"
-        "`+380 (XX) XXX XX XX`",
+        f"Радий знайомству, <b>{user_name}</b>! Давай далі 💪<br>"
+        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.<br><br>"
+        "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
         reply_markup=contact_keyboard,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.HTML
     )
     return PHONE
 
@@ -202,22 +230,19 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_phone = update.message.text.strip()
     print(f"DEBUG: Отримано телефон (текстом): {raw_phone}")
 
-    # Видаляємо всі символи, крім цифр
     digits_only = re.sub(r"\D", "", raw_phone)
 
-    # Нормалізуємо номер:
     if digits_only.startswith("0") and len(digits_only) == 10:
         normalized = "+380" + digits_only[1:]
     elif digits_only.startswith("380") and len(digits_only) == 12:
         normalized = "+" + digits_only
-    elif digits_only.startswith("67") or digits_only.startswith("68") or digits_only.startswith("50") or digits_only.startswith("63"):
-        # Без коду країни — вважаємо валідним
+    elif digits_only.startswith(("67", "68", "50", "63")):
         normalized = "+380" + digits_only
     else:
         await update.message.reply_text(
-            "⚠️ Невірний формат номеру.\n"
-            "Приклад коректного номеру: `+380 (67) 123 45 67`, `0671234567`, або `67 123 45 67`",
-            parse_mode=ParseMode.MARKDOWN
+            "⚠️ <b>Невірний формат номеру.</b><br>"
+            "Приклад коректного номеру: <code>+380671234567</code>, <code>0671234567</code>, або <code>67 123 45 67</code>",
+            parse_mode=ParseMode.HTML
         )
         return PHONE
 
@@ -225,49 +250,65 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: Нормалізований номер: {normalized}")
 
     await update.message.reply_text(
-        "Спеціальність?",
-        reply_markup=ReplyKeyboardRemove()
+        f"✅ Ваш номер <b>{normalized}</b> збережено",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=ParseMode.HTML
     )
     return await ask_specialty(update, context)
-
-
 
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
     user_id = update.effective_user.id
 
-    # Важлива перевірка: користувач має поділитися СВОЇМ контактом
     if contact.user_id != user_id:
         await update.message.reply_text(
-            "Будь ласка, поділіться вашим власним контактом.",
-            # Можна знову надіслати клавіатуру для запиту контакту, якщо потрібно
+            "Будь ласка, поділіться <b>вашим власним</b> контактом.",
+            parse_mode=ParseMode.HTML
         )
-        # Залишаємося в тому ж стані, щоб дозволити повторну спробу або текстове введення
         return PHONE
 
     phone_number = contact.phone_number
     print(f"DEBUG: Отримано контакт (через кнопку): {phone_number} від user_id={user_id}")
-    context.user_data["phone"] = phone_number
+
+    digits_only = re.sub(r"\D", "", phone_number)
+    if digits_only.startswith("380") and len(digits_only) == 12:
+        normalized = "+" + digits_only
+    elif len(digits_only) == 10 and digits_only.startswith("0"):
+        normalized = "+380" + digits_only[1:]
+    elif len(digits_only) == 9:
+        normalized = "+380" + digits_only
+    else:
+        print("⚠️ Невірний номер після обробки:", digits_only)
+        await update.message.reply_text(
+            "⚠️ <b>Виникла проблема з номером телефону.</b><br>"
+            "Введіть його вручну у форматі: <code>+380XXXXXXXXX</code>",
+            parse_mode=ParseMode.HTML
+        )
+        return PHONE
+
+    context.user_data["phone"] = normalized
 
     await update.message.reply_text(
-        f"Дякую, ваш номер {phone_number} збережено. Тепер вкажіть вашу спеціальність?",
-        reply_markup=ReplyKeyboardRemove()  # Прибираємо клавіатуру "Поділитися номером"
+        f"✅ Ваш номер <b>{normalized}</b> збережено",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=ParseMode.HTML
     )
     return await ask_specialty(update, context)
+
+
 
 async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
-        [InlineKeyboardButton("Монтажник", callback_data="spec:Монтажник")],
-        [InlineKeyboardButton("Слюсар", callback_data="spec:Слюсар")],
-        [InlineKeyboardButton("Череззаборногуперкидатор", callback_data="spec:Череззаборногуперкидатор")],
-        [InlineKeyboardButton("Роздолбай", callback_data="spec:Роздолбай")],
+        [InlineKeyboardButton("Муляр", callback_data="spec:Муляр")],
+        [InlineKeyboardButton("Монолітник", callback_data="spec:Монолітник")],
+        [InlineKeyboardButton("Арматурник", callback_data="spec:Арматурник")],
         [InlineKeyboardButton("Інша спеціальність", callback_data="spec:other")]
     ])
 
     await update.message.reply_text(
-        "Виберіть свою спеціальність:",
+        "Обери свою спеціальність:",
         reply_markup=keyboard
     )
     return SPECIALTY
@@ -289,6 +330,16 @@ async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAU
 
 async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     specialty = update.message.text.strip()
+
+    # Базовая валидация
+    if not specialty or len(specialty) < 2 or any(c in specialty for c in "!@#$%^&*(){}[]<>"):
+        await update.message.reply_text("⚠️ Введіть коректну спеціальність (не менше 2 літер, без спецсимволів).")
+        return SPECIALTY
+
+    if specialty in ["📋 Профіль", "✏️ Оновити анкету"]:
+        await update.message.reply_text("⚠️ Це виглядає як кнопка. Введіть свою спеціальність вручну.")
+        return SPECIALTY
+
     context.user_data["specialty"] = specialty
     await update.message.reply_text(f"✅ Спеціальність збережено: {specialty}")
     return await ask_experience(update, context)
@@ -296,17 +347,19 @@ async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_
 
 async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("0–2 роки", callback_data="exp:0-2"),
-         InlineKeyboardButton("3–5 років", callback_data="exp:3-5")],
-        [InlineKeyboardButton("6–10 років", callback_data="exp:6-10"),
-         InlineKeyboardButton("11+ років", callback_data="exp:11+")],
+        [InlineKeyboardButton("<1 року", callback_data="exp:<1"),
+         InlineKeyboardButton("1–2 роки", callback_data="exp:1-2")],
+        [InlineKeyboardButton("3–5 років", callback_data="exp:3-5"),
+         InlineKeyboardButton(">5 років", callback_data="exp:>5")],
     ])
 
     chat = update.effective_chat
+    user_name = context.user_data.get("name", "друже")
     await context.bot.send_message(
         chat_id=chat.id,
-        text="Скільки у вас досвіду роботи?",
-        reply_markup=keyboard
+        text=f"Чудово, <b>{user_name}</b>! Ще трошки! 🤗<br>Скільки років ти працюєш за спеціальністю?",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
     )
     return EXPERIENCE
 
@@ -317,20 +370,30 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     data = query.data
+    valid_experiences = ["<1", "1-2", "3-5", ">5"]
+
     if data.startswith("exp:"):
         experience = data.split(":")[1]
-        context.user_data["experience"] = experience
+        if experience not in valid_experiences:
+            await query.edit_message_text("⚠️ Невідомий варіант досвіду. Будь ласка, вибери зі списку.")
+            return EXPERIENCE
 
+        context.user_data["experience"] = experience
         await query.edit_message_text(f"✅ Досвід: {experience} років")
-        await query.message.reply_text("Вкажіть назву компанії, в якій ви працюєте (або працювали):")
+        await query.message.reply_text("Майже все. Просто вкажи назву компанії, в якій ти працюєш (або працював):")
         return COMPANY
 
-
-
 async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["company"] = update.message.text
+    company = update.message.text.strip()
+
+    if not company or len(company) < 2 or company in ["📋 Профіль", "✏️ Оновити анкету"]:
+        await update.message.reply_text("⚠️ Введіть коректну назву компанії.")
+        return COMPANY
+
+    context.user_data["company"] = company
     tg_id = update.effective_user.id
     user_obj = update.effective_user
+
     try:
         await insert_or_update_user(
             tg_id=tg_id,
@@ -339,18 +402,32 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
             phone=context.user_data.get("phone"),
             speciality=context.user_data.get("specialty"),
             experience=context.user_data.get("experience"),
-            company=context.user_data.get("company"),
+            company=company,
             username=user_obj.username,
             updated_at=datetime.utcnow()
         )
-        await update.message.reply_text("Дякую! Анкету збережено. Тепер давай продовжимо спілкування 😊", reply_markup=menu_keyboard)
+
+        await update.message.reply_text(
+            "✅ Анкету збережено!<br><br>"
+            "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
+            "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.<br><br>"
+            "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>! 🫡",
+            reply_markup=menu_keyboard,
+            parse_mode=ParseMode.HTML
+        )
+
         print(f"DEBUG: Дані збережено для tg_id={tg_id}")
+
     except Exception as e:
         print(f"ERROR: Не вдалося зберегти анкету в базу для {tg_id}: {e}")
-        await update.message.reply_text("Вибач, сталася помилка при збереженні анкети.")
+        await update.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
 
     context.user_data.clear()
     return ConversationHandler.END
+
+
+
+
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_id = update.effective_user.id
@@ -390,7 +467,7 @@ async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     print("DEBUG: Оновлення профілю")
-    await update.message.reply_text("Оновимо анкету. Як тебе звати?")
+    await update.message.reply_text("Оновимо анкету. Напиши своє імʼя")
     return NAME
 
 
@@ -490,69 +567,85 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
 
+from telegram import BotCommand
+
+async def set_bot_commands(application):
+    await application.bot.set_my_commands([
+        BotCommand("support", "поскаржитися"),
+        BotCommand("profile", "показати профіль"),
+        BotCommand("update_profile", "редагувати профіль"),
+    ])
 
 # --- Lifespan для ініціалізації та зупинки бота ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🔁 Lifespan запускається: ініціалізація Telegram App...")
+
+    # 1. Ініціалізація Telegram Application
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.state.telegram_app = application
 
-    # --- ВИДАЛІТЬ ЦІ РЯДКИ ІМПОРТУ ---
-    # from main_handlers import start, get_name, get_surname, get_phone, get_specialty, cancel
-    # from main_handlers import show_profile, update_profile, handle_message, handle_voice
-    # --- КІНЕЦЬ ВИДАЛЕННЯ ---
-
-    # Оскільки функції start, get_name і т.д. визначені в цьому ж файлі,
-    # вони вже доступні тут за своїми іменами.
-
+    # 2. Хендлер анкети (поетапне опитування)
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler("start", start), # Використовуємо 'start' напряму
+            CommandHandler("start", start),
             CommandHandler("update_profile", update_profile),
-            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile), # Використовуємо 'update_profile' напряму
+            MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
         ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
-            # --- ОНОВЛЕНО СТАН PHONE ---
             PHONE: [
-                MessageHandler(filters.CONTACT, process_contact_info), # Обробник для отриманого контакту
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)  # Обробник для текстового введення номера
+                MessageHandler(filters.CONTACT, process_contact_info),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)
             ],
-            # --- КІНЕЦЬ ОНОВЛЕННЯ ---
-            SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)],
+            SPECIALTY: [
+                CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)
+            ],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
             COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)], # Використовуємо 'cancel' напряму
+        fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False
     )
     application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile)) # Використовуємо 'show_profile' напряму
-    application.add_handler(CommandHandler("profile", show_profile)) # Те саме
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice)) # Використовуємо 'handle_voice' напряму
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)) # Використовуємо 'handle_message' напряму
+
+    # 3. Команди / функціональні хендлери
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("support", support_command))
+    application.add_handler(CommandHandler("profile", show_profile))
+    application.add_handler(CommandHandler("update_profile", update_profile))
+
+    # 4. Хендлери на текстові кнопки
+    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
     application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
     application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
-    application.add_handler(CommandHandler("start", start))
 
+    # 6. Запуск
     await application.initialize()
+    await set_bot_commands(application)
     await application.start()
+
+    # 7. Встановлення webhook
     try:
         print(f"DEBUG: Встановлюємо webhook на URL: {WEBHOOK_URL}")
-        # !!! ЗВЕРНІТЬ УВАГУ: Ви раніше використовували WEBHOOK_SECRET_TOKEN.
-        # Якщо він потрібен, його слід додати сюди.
         await application.bot.set_webhook(
             url=WEBHOOK_URL,
             allowed_updates=Update.ALL_TYPES
-            # secret_token=WEBHOOK_SECRET_TOKEN # Розкоментуйте, якщо використовуєте секретний токен
+            # secret_token=WEBHOOK_SECRET_TOKEN
         )
         print("✅ Webhook встановлено успішно.")
     except Exception as e:
         print(f"ERROR: Не вдалося встановити webhook: {e}")
+
     yield
+
+    # 8. Завершення
     print("❌ Lifespan завершується: зупиняємо Telegram App...")
     await application.stop()
     try:
