@@ -130,7 +130,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if user and user.first_name:
                     await update.message.reply_text(
-                        f"З поверненням, <b>{html.escape(user.first_name)}</b>!<br>Готовий відповідати на твої запитання:",
+                        f"З поверненням, <b>{html.escape(user.first_name)}</b>!\nГотовий відповідати на твої запитання:",
                         reply_markup=menu_keyboard,
                         parse_mode=ParseMode.HTML
                     )
@@ -147,7 +147,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return NAME
     else:
         await update.message.reply_text(
-            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊<br>Напиши своє імʼя",
+            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊\nНапиши своє імʼя",
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
@@ -182,8 +182,8 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
-        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪<br>"
-        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.<br><br>"
+        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪\n"
+        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.\n\n"
         "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
@@ -205,7 +205,7 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         normalized = "+380" + digits_only
     else:
         await update.message.reply_text(
-            "⚠️ <b>Невірний формат номеру.</b><br>"
+            "⚠️ <b>Невірний формат номеру.</b>\n"
             "Приклад коректного номеру: <code>+380671234567</code>, <code>0671234567</code>, або <code>67 123 45 67</code>",
             parse_mode=ParseMode.HTML
         )
@@ -323,7 +323,7 @@ async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = context.user_data.get("name", "друже")
     await context.bot.send_message(
         chat_id=chat.id,
-        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗<br>Скільки років ти працюєш за спеціальністю?",
+        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗\nСкільки років ти працюєш за спеціальністю?",
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML
     )
@@ -374,9 +374,9 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await update.message.reply_text(
-            "✅ Анкету збережено!<br><br>"
+            "✅ Анкету збережено!\n\n"
             "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
-            "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.<br><br>"
+            "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.\n\n"
             "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
             reply_markup=menu_keyboard,
             parse_mode=ParseMode.HTML
