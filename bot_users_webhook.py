@@ -399,7 +399,6 @@ async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_id = update.effective_user.id
 
@@ -423,15 +422,18 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
-            await ensure_menu_keyboard(update, context)
 
+            # Скрываем старую клавиатуру без текста
+            await update.message.reply_text("‎", reply_markup=ReplyKeyboardRemove())
+
+            # Показываем актуальное меню
+            await send_menu_keyboard(update, context)
 
     except Exception as e:
         print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при завантаженні профілю.")
 
-
-
+    return ConversationHandler.END
 
 
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -469,6 +471,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
+    # Скрыть старую клавиатуру (без текста)
+    await update.message.reply_text("‎", reply_markup=ReplyKeyboardRemove())  # Невидимый символ
+
     if text == "📋 Профіль":
         return await show_profile(update, context)
 
@@ -483,7 +488,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from qa_engine import get_answer
         await handle_user_question_with_thinking(update, context, get_answer)
-        await ensure_menu_keyboard(update, context)
+
+        # Установить актуальное меню
+        await send_menu_keyboard(update, context)
 
     except ImportError:
         print("ERROR: Модуль qa_engine не знайдено!")
@@ -491,6 +498,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"ERROR: Помилка при отриманні відповіді від qa_engine: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при обробці вашого запиту.")
+
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -554,6 +562,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
+
 
 
 from telegram import BotCommand
