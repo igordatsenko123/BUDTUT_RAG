@@ -62,11 +62,13 @@ menu_keyboard = ReplyKeyboardMarkup(
 
 async def ensure_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        await update.message.reply_text("Оновлюю меню…", reply_markup=ReplyKeyboardRemove())
+        # Удаляем старую клавиатуру без видимого текста
+        await update.message.reply_text("\u200B", reply_markup=ReplyKeyboardRemove())
         await asyncio.sleep(0.2)  # даём Telegram немного времени очистить клавиатуру
         await send_menu_keyboard(update, context)
     except Exception as e:
         print(f"ERROR: Не вдалося оновити клавіатуру: {e}")
+
 
 async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     menu_keyboard = ReplyKeyboardMarkup(
