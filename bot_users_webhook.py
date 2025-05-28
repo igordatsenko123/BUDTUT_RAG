@@ -55,7 +55,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]
+        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=8"))]
     ],
     resize_keyboard=True
 )
@@ -96,9 +96,6 @@ async def is_registered(user_id: int) -> bool:
         return user is not None
 
 # === Анкета та Обробники
-# Тут йдуть ваші функції: start, get_name, get_surname, get_phone,
-# Важливо: Вони мають бути визначені ДО того, як вони додаються як хендлери в lifespan
-
 from telegram import ReplyKeyboardRemove
 
 async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,7 +119,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=menu_keyboard,
                         parse_mode=ParseMode.HTML
                     )
-                    # 🔥 Удаляем вызов send_menu_keyboard
+
                     return ConversationHandler.END
                 else:
                     raise ValueError("Дані користувача не знайдено")
@@ -172,7 +169,7 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
         f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪\n"
-        "Поділись своєю номером телефону, натиснувши кнопку нижче або просто напиши його.\n"
+        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.\n"
         "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
