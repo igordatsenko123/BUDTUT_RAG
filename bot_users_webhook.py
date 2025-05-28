@@ -60,28 +60,6 @@ menu_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-async def ensure_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        # Удаляем старую клавиатуру без видимого текста
-        await update.message.reply_text("\u200B", reply_markup=ReplyKeyboardRemove())
-        await asyncio.sleep(0.2)  # даём Telegram немного времени очистить клавиатуру
-        await send_menu_keyboard(update, context)
-    except Exception as e:
-        print(f"ERROR: Не вдалося оновити клавіатуру: {e}")
-
-
-async def send_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    menu_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(
-            url="https://igordatsenko123.github.io/TG_WEB_APP_AISAFETYCOACH/?v=7"))]],
-        resize_keyboard=True
-    )
-
-    await update.message.reply_text(
-        text=".",  # невидимый символ
-        reply_markup=menu_keyboard
-    )
-
 print("DEBUG: Імпорти завершені")
 print(f"DEBUG: Webhook URL буде встановлено на: {WEBHOOK_URL}")
 
@@ -127,6 +105,7 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Можеш залишити звернення в нашій групі підтримки:\nhttps://t.me/ai_safety_coach_support"
     )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -143,7 +122,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=menu_keyboard,
                         parse_mode=ParseMode.HTML
                     )
-                    await send_menu_keyboard(update, context)
+                    # 🔥 Удаляем вызов send_menu_keyboard
                     return ConversationHandler.END
                 else:
                     raise ValueError("Дані користувача не знайдено")
@@ -161,6 +140,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         return NAME
+
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -423,13 +403,12 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Компанія:</b> {user.company or 'N/A'}"
             )
 
-            await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
-
-            # Скрываем старую клавиатуру без текста
-            await update.message.reply_text("‎", reply_markup=ReplyKeyboardRemove())
-
-            # Показываем актуальное меню
-            await send_menu_keyboard(update, context)
+            # Показываем профиль и одновременно обновляем клавиатуру
+            await update.message.reply_text(
+                text=profile_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=menu_keyboard  # ← актуальная клавиатура здесь
+            )
 
     except Exception as e:
         print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
@@ -473,9 +452,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # Скрыть старую клавиатуру (без текста)
-    await update.message.reply_text("‎", reply_markup=ReplyKeyboardRemove())  # Невидимый символ
-
     if text == "📋 Профіль":
         return await show_profile(update, context)
 
@@ -489,10 +465,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         from qa_engine import get_answer
-        await handle_user_question_with_thinking(update, context, get_answer)
+        answer = get_answer(text)
 
-        # Установить актуальное меню
-        await send_menu_keyboard(update, context)
+        # Отправляем ответ с клавиатурой
+        await update.message.reply_text(
+            text=answer,
+            parse_mode=ParseMode.HTML,
+            reply_markup=menu_keyboard  # ← сразу прикрепляем актуальное меню
+        )
 
     except ImportError:
         print("ERROR: Модуль qa_engine не знайдено!")
@@ -500,6 +480,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"ERROR: Помилка при отриманні відповіді від qa_engine: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при обробці вашого запиту.")
+
 
 
 
@@ -540,8 +521,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_message(user.id, username, update.message.message_id, "voice", "question", recognized_text)
 
         from qa_engine import get_answer
-        await handle_user_question_with_thinking(update, context, get_answer)
-        await ensure_menu_keyboard(update, context)
+        answer = get_answer(recognized_text)
+
+        # Финальный ответ с клавиатурой
+        await update.message.reply_text(
+            text=answer,
+            parse_mode=ParseMode.HTML,
+            reply_markup=menu_keyboard
+        )
+
     except FileNotFoundError:
         print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
         await update.message.reply_text("Помилка обробки аудіо: ffmpeg не знайдено.")
@@ -564,6 +552,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
+
 
 
 
