@@ -346,7 +346,8 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
             )
             await query.message.reply_text(
                 "Я завжди на звʼязку — чекаю на твої питання 24/7!",
-                reply_markup=menu_keyboard
+                reply_markup=menu_keyboard,
+                parse_mode = ParseMode.HTML
             )
             context.user_data.clear()
             return ConversationHandler.END
@@ -400,9 +401,13 @@ async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     print("DEBUG: Оновлення профілю")
-    await update.message.reply_text(f"Привіт, {html.escape(name)}! Давай оновимо анкету.")
+
+    first_name = update.effective_user.first_name or "друже"
+
+    await update.message.reply_text(f"Привіт, {html.escape(first_name)}! Давай оновимо анкету.")
     await update.message.reply_text("Напиши своє імʼя")
     return NAME
+
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
