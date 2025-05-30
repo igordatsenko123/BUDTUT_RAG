@@ -100,7 +100,7 @@ from telegram import ReplyKeyboardRemove
 
 async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Можеш залишити звернення в нашій групі підтримки:\nhttps://t.me/ai_safety_coach_support"
+        "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,7 +148,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NAME
 
     context.user_data["name"] = name
-    await update.message.reply_text("Прізвище?", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,9 +168,13 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
-        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪\n"
-        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.\n"
-        "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
+        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪",
+        parse_mode=ParseMode.HTML
+    )
+
+    await update.message.reply_text(
+        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.\n\n"
+        "<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
     )
@@ -200,12 +204,8 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["phone"] = normalized
     print(f"DEBUG: Нормалізований номер: {normalized}")
 
-    await update.message.reply_text(
-        f"✅ Твій номер <b>{normalized}</b> збережено",
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode=ParseMode.HTML
-    )
-    return await ask_specialty(update, context)
+
+    return await ask_specialty(update, context, remove_keyboard=True)
 
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -236,14 +236,10 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data["phone"] = normalized
 
-    await update.message.reply_text(
-        f"Дякую, твій номер <b>{html.escape(normalized)}</b> збережено",
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode=ParseMode.HTML
-    )
-    return await ask_specialty(update, context)
 
-async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await ask_specialty(update, context, remove_keyboard=True)
+
+async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE, remove_keyboard=False):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
         [InlineKeyboardButton("Муляр", callback_data="spec:Муляр")],
@@ -253,7 +249,7 @@ async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
 
     await update.message.reply_text(
-        "Обери свою спеціальність:",
+        "Добре! Обери свою спеціальність",
         reply_markup=keyboard
     )
     return SPECIALTY
@@ -343,13 +339,14 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
                 username=user_obj.username,
                 updated_at=datetime.utcnow()
             )
+
             await query.message.reply_text(
-                "✅ Анкету збережено!\n\n"
-                "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
-                "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.\n\n"
-                "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
-                reply_markup=menu_keyboard,
+                "✅ Готово! Тепер задавай мені будь-яке питання з безпеки праці або проходь курс “Навчання з Охорони Праці” — кнопка знизу екрана",
                 parse_mode=ParseMode.HTML
+            )
+            await query.message.reply_text(
+                "Я завжди на звʼязку — чекаю на твої питання 24/7!",
+                reply_markup=menu_keyboard
             )
             context.user_data.clear()
             return ConversationHandler.END
@@ -403,7 +400,8 @@ async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     print("DEBUG: Оновлення профілю")
-    await update.message.reply_text("Оновимо анкету. Напиши своє імʼя")
+    await update.message.reply_text(f"Привіт, {html.escape(name)}! Давай оновимо анкету.")
+    await update.message.reply_text("Напиши своє імʼя")
     return NAME
 
 
