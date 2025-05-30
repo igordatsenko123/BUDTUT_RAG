@@ -29,9 +29,11 @@ AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSes
 
 async def init_db():
     async with engine.begin() as conn:
+        print("🧨 Drop старої таблиці...")
         await conn.run_sync(Base.metadata.drop_all)
+        print("✅ Створення нової таблиці users без company...")
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ Таблиця users успішно пересоздана")
+    print("🎉 Таблиця users успішно пересоздана без поля company")
 
 if __name__ == "__main__":
     asyncio.run(init_db())

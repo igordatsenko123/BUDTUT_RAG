@@ -13,6 +13,5 @@ class User(Base):
     phone = Column(String)
     speciality = Column(String)
     experience = Column(String)
-    company = Column(String)
     username = Column(String)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

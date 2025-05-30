@@ -2,7 +2,7 @@ from sqlalchemy import select
 from models import User
 from db import SessionLocal
 
-async def insert_or_update_user(tg_id, first_name, last_name, phone, speciality, experience, company, username, updated_at):
+async def insert_or_update_user(tg_id, first_name, last_name, phone, speciality, experience, username, updated_at):
     async with SessionLocal() as session:
         user = await session.get(User, tg_id)
         if not user:
@@ -13,7 +13,6 @@ async def insert_or_update_user(tg_id, first_name, last_name, phone, speciality,
                 phone=phone,
                 speciality=speciality,
                 experience=experience,
-                company=company,
                 username=username,
                 updated_at=updated_at
             )
@@ -24,7 +23,6 @@ async def insert_or_update_user(tg_id, first_name, last_name, phone, speciality,
             user.phone = phone
             user.speciality = speciality
             user.experience = experience
-            user.company = company
             user.username = username
             user.updated_at = updated_at
         await session.commit()

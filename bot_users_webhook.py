@@ -51,7 +51,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 LOG_FILE = "chat_history.csv"
 
-NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
+NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE = range(5)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
@@ -330,52 +330,35 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
 
         context.user_data["experience"] = experience
         await query.edit_message_text(f"✅ Досвід: <b>{html.escape(experience)}</b> років", parse_mode=ParseMode.HTML)
-        await query.message.reply_text(
-            "Майже все. Просто вкажи назву компанії, в якій ти працюєш (або працював):"
-        )
-        return COMPANY
+        tg_id = update.effective_user.id
+        user_obj = update.effective_user
+        try:
+            await insert_or_update_user(
+                tg_id=tg_id,
+                first_name=context.user_data.get("name"),
+                last_name=context.user_data.get("surname"),
+                phone=context.user_data.get("phone"),
+                speciality=context.user_data.get("specialty"),
+                experience=experience,
+                username=user_obj.username,
+                updated_at=datetime.utcnow()
+            )
+            await query.message.reply_text(
+                "✅ Анкету збережено!\n\n"
+                "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
+                "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.\n\n"
+                "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
+                reply_markup=menu_keyboard,
+                parse_mode=ParseMode.HTML
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+        except Exception as e:
+            print(f"ERROR: Не вдалося зберегти анкету в базу: {e}")
+            await query.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
+            return ConversationHandler.END
 
-async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    company = update.message.text.strip()
 
-    if not company or len(company) < 2 or company in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text("⚠️ Введи коректну назву компанії.")
-        return COMPANY
-
-    context.user_data["company"] = company
-    tg_id = update.effective_user.id
-    user_obj = update.effective_user
-
-    try:
-        await insert_or_update_user(
-            tg_id=tg_id,
-            first_name=context.user_data.get("name"),
-            last_name=context.user_data.get("surname"),
-            phone=context.user_data.get("phone"),
-            speciality=context.user_data.get("specialty"),
-            experience=context.user_data.get("experience"),
-            company=company,
-            username=user_obj.username,
-            updated_at=datetime.utcnow()
-        )
-
-        await update.message.reply_text(
-            "✅ Анкету збережено!\n\n"
-            "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
-            "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.\n\n"
-            "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
-            reply_markup=menu_keyboard,
-            parse_mode=ParseMode.HTML
-        )
-
-        print(f"DEBUG: Дані збережено для tg_id={tg_id}")
-
-    except Exception as e:
-        print(f"ERROR: Не вдалося зберегти анкету в базу для {tg_id}: {e}")
-        await update.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
-
-    context.user_data.clear()
-    return ConversationHandler.END
 
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -397,7 +380,6 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Телефон:</b> {user.phone or 'N/A'}\n"
                 f"<b>Спеціальність:</b> {user.speciality or 'N/A'}\n"
                 f"<b>Досвід:</b> {user.experience or 'N/A'}\n"
-                f"<b>Компанія:</b> {user.company or 'N/A'}"
             )
 
             # Показываем профиль и одновременно обновляем клавиатуру
@@ -590,7 +572,6 @@ async def lifespan(app: FastAPI):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)
             ],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
-            COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False
