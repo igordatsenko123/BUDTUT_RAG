@@ -134,10 +134,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return NAME
     else:
         await update.message.reply_text(
-            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊\nНапиши своє імʼя",
+            "Привіт!\nЯ твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
+
+        await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
+
+        await update.message.reply_text(
+            "Напиши своє імʼя",
+            parse_mode=ParseMode.HTML
+        )
+
         return NAME
 
 
@@ -246,8 +254,7 @@ async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE, remo
         [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
         [InlineKeyboardButton("Муляр", callback_data="spec:Муляр")],
         [InlineKeyboardButton("Монолітник", callback_data="spec:Монолітник")],
-        [InlineKeyboardButton("Арматурник", callback_data="spec:Арматурник")],
-        [InlineKeyboardButton("Інша спеціальність", callback_data="spec:other")]
+        [InlineKeyboardButton("Арматурник", callback_data="spec:Арматурник")]
     ])
 
     await update.message.reply_text(
@@ -263,36 +270,10 @@ async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAU
 
     if data.startswith("spec:"):
         specialty = data.replace("spec:", "")
-        if specialty == "other":
-            await query.edit_message_text("✏️ Напиши вручну свою спеціальність:")
-            return SPECIALTY
-        else:
-            context.user_data["specialty"] = specialty
-            await query.edit_message_text(f"✅ Спеціальність: <b>{html.escape(specialty)}</b>", parse_mode=ParseMode.HTML)
-            return await ask_experience(update, context)
+        context.user_data["specialty"] = specialty
+        await query.edit_message_text(f"✅ Спеціальність: <b>{html.escape(specialty)}</b>", parse_mode=ParseMode.HTML)
+        return await ask_experience(update, context)
 
-async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    specialty = update.message.text.strip()
-
-    # Базовая валидация
-    if not specialty or len(specialty) < 2 or any(c in specialty for c in "!@#$%^&*(){}[]<>"):
-        await update.message.reply_text(
-            "⚠️ Введ коректну спеціальність (не менше 2 літер, без спецсимволів)."
-        )
-        return SPECIALTY
-
-    if specialty in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text(
-            "⚠️ Це виглядає як кнопка. Введи свою спеціальність вручну."
-        )
-        return SPECIALTY
-
-    context.user_data["specialty"] = specialty
-    await update.message.reply_text(
-        f"✅ Спеціальність збережено: <b>{html.escape(specialty)}</b>",
-        parse_mode=ParseMode.HTML
-    )
-    return await ask_experience(update, context)
 
 
 async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -305,12 +286,22 @@ async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat = update.effective_chat
     user_name = context.user_data.get("name", "друже")
+
     await context.bot.send_message(
         chat_id=chat.id,
-        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗\nСкільки років ти працюєш за спеціальністю?",
+        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗",
+        parse_mode=ParseMode.HTML
+    )
+
+    await asyncio.sleep(1)
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text="Скільки років ти працюєш за спеціальністю?",
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML
     )
+
     return EXPERIENCE
 
 async def handle_experience_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -343,11 +334,13 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
             )
 
             await query.message.reply_text(
-                "✅ Готово! Тепер задавай мені будь-яке питання з безпеки праці або проходь курс “Навчання з Охорони Праці” — кнопка знизу екрана",
+                "✅ Готово! Тепер задавай мені будь-яке питання з безпеки праці або проходь курс <b>Навчання з Охорони Праці</b> — кнопка знизу екрана",
                 parse_mode=ParseMode.HTML
             )
+            await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
+
             await query.message.reply_text(
-                "Я завжди на звʼязку — чекаю на твої питання 24/7!",
+                "Я завжди на звʼязку — чекаю на твої питання 24/7! \U0001FAE1"",
                 reply_markup=menu_keyboard,
                 parse_mode = ParseMode.HTML
             )
@@ -370,8 +363,8 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = result.scalar_one_or_none()
 
             if user is None:
-                await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-                return ConversationHandler.END
+                print(f"DEBUG: Користувач {tg_id} не знайдений у базі — запускаємо start()")
+                return await start(update, context)
 
             profile_text = (
                 f"👤 <b>Твоя анкета:</b>\n"
@@ -399,14 +392,16 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await is_registered(user_id):
-        await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-        return ConversationHandler.END
+        print(f"DEBUG: Користувач {tg_id} не знайдений у базі — запускаємо start()")
+        return await start(update, context)
 
     print("DEBUG: Оновлення профілю")
 
     first_name = update.effective_user.first_name or "друже"
 
     await update.message.reply_text(f"Привіт, {html.escape(first_name)}! Давай оновимо анкету.")
+    await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
+
     await update.message.reply_text("Напиши своє імʼя")
     return NAME
 
@@ -440,8 +435,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_profile(update, context)
 
     if not await is_registered(user_id):
-        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
-        return
+        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
+        return await start(update, context)
 
     user = update.effective_user
     username = user.username or user.first_name
@@ -472,8 +467,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
     if not await is_registered(user_id):
-        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
-        return
+        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
+        return await start(update, context)
 
     voice = update.message.voice
     user = update.message.from_user
@@ -570,10 +565,7 @@ async def lifespan(app: FastAPI):
                 MessageHandler(filters.CONTACT, process_contact_info),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)
             ],
-            SPECIALTY: [
-                CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)
-            ],
+            SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:")],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
