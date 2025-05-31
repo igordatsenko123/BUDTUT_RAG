@@ -340,7 +340,7 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
             await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
 
             await query.message.reply_text(
-                "Я завжди на звʼязку — чекаю на твої питання 24/7! \U0001FAE1"",
+                "Я завжди на звʼязку — чекаю на твої питання 24/7! \U0001FAE1",
                 reply_markup=menu_keyboard,
                 parse_mode = ParseMode.HTML
             )
