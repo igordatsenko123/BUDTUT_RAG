@@ -86,4 +86,4 @@ sqlalchemy>=2.0
 asyncpg
 python-dotenv
 pydub==0.25.1
-ffmpeg-static==4.4.0.post0
+imageio-ffmpeg==0.4.8

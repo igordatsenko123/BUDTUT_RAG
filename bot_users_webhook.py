@@ -11,7 +11,7 @@ import re
 from crud import insert_or_update_user
 import html
 from pydub import AudioSegment
-import ffmpeg_static
+import imageio_ffmpeg
 
 # --- Telegram ---
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -487,10 +487,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(input_ogg)
         print(f"DEBUG: Voice file downloaded to {input_ogg}")
 
-        print("DEBUG: Конвертація через pydub + ffmpeg-static")
-        AudioSegment.converter = ffmpeg_static.get_path()  # вказуємо шлях до локального ffmpeg
+        print("DEBUG: Конвертація через pydub + imageio-ffmpeg")
+        AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
         audio = AudioSegment.from_file(input_ogg, format="ogg")
-        audio = audio.set_frame_rate(16000).set_channels(1)  # відповідно до Whisper API
+        audio = audio.set_frame_rate(16000).set_channels(1)
         audio.export(output_wav, format="wav")
         print(f"DEBUG: Converted file saved to {output_wav}")
 
