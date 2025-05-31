@@ -85,3 +85,5 @@ zipp==3.20.2
 sqlalchemy>=2.0
 asyncpg
 python-dotenv
+pydub==0.25.1
+ffmpeg-static==4.4.0.post0
