@@ -134,7 +134,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return NAME
     else:
         await update.message.reply_text(
-            "Привіт!\nЯ твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
+            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
@@ -214,8 +214,10 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["phone"] = normalized
     print(f"DEBUG: Нормалізований номер: {normalized}")
 
+    # Повідомлення з підтвердженням і видаленням клавіатури
+    await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
 
-    return await ask_specialty(update, context, remove_keyboard=True)
+    return await ask_specialty(update, context)
 
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -229,7 +231,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     phone_number = contact.phone_number
     print(f"DEBUG: Отримано контакт (через кнопку): {phone_number} від user_id={user_id}")
 
-    digits_only = re.sub(r"\\D", "", phone_number)
+    digits_only = re.sub(r"\D", "", phone_number)
     if digits_only.startswith("380") and len(digits_only) == 12:
         normalized = "+" + digits_only
     elif len(digits_only) == 10 and digits_only.startswith("0"):
@@ -246,10 +248,12 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data["phone"] = normalized
 
+    # Повідомлення з підтвердженням і видаленням клавіатури
+    await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
 
-    return await ask_specialty(update, context, remove_keyboard=True)
+    return await ask_specialty(update, context)
 
-async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE, remove_keyboard=False):
+async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
         [InlineKeyboardButton("Муляр", callback_data="spec:Муляр")],
@@ -258,7 +262,7 @@ async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE, remo
     ])
 
     await update.message.reply_text(
-        "Добре! Обери свою спеціальність",
+        "Тепер обери свою спеціальність",
         reply_markup=keyboard
     )
     return SPECIALTY
