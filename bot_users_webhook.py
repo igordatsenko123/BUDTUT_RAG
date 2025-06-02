@@ -362,6 +362,7 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
                 reply_markup=menu_keyboard,
                 parse_mode = ParseMode.HTML
             )
+            context.user_data.pop("profile_started", None)  # Видаляємо прапор
             context.user_data.clear()
             return ConversationHandler.END
         except Exception as e:
