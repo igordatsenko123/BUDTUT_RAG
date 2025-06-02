@@ -10,6 +10,8 @@ from models import User
 import re
 from crud import insert_or_update_user
 import html
+from pydub import AudioSegment
+import imageio_ffmpeg
 
 # --- Telegram ---
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -51,7 +53,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 LOG_FILE = "chat_history.csv"
 
-NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE, COMPANY = range(6)
+NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE = range(5)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
@@ -100,12 +102,16 @@ from telegram import ReplyKeyboardRemove
 
 async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Можеш залишити звернення в нашій групі підтримки:\nhttps://t.me/ai_safety_coach_support"
+        "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
+
+    # 🛑 Запобігаємо повторному запуску анкети
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Анкета вже почата — пропускаємо повторний запуск.")
+        return
 
     if await is_registered(user_id):
         try:
@@ -119,26 +125,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=menu_keyboard,
                         parse_mode=ParseMode.HTML
                     )
-
                     return ConversationHandler.END
                 else:
                     raise ValueError("Дані користувача не знайдено")
-
         except Exception as e:
             print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
             await update.message.reply_text(
                 "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?"
             )
+            context.user_data["profile_started"] = True
             return NAME
     else:
         await update.message.reply_text(
-            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊\nНапиши своє імʼя",
+            "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
+        await asyncio.sleep(1)
+        await update.message.reply_text("Напиши своє імʼя", parse_mode=ParseMode.HTML)
+        context.user_data["profile_started"] = True
         return NAME
-
-
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text.strip()
@@ -148,7 +154,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NAME
 
     context.user_data["name"] = name
-    await update.message.reply_text("Прізвище?", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
 async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,9 +174,13 @@ async def get_surname(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_name = context.user_data.get("name", "друже")
     await update.message.reply_text(
-        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪\n"
-        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.\n"
-        "(<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>)",
+        f"Радий знайомству, <b>{html.escape(user_name)}</b>! Давай далі 💪",
+        parse_mode=ParseMode.HTML
+    )
+
+    await update.message.reply_text(
+        "Поділись своїм номером телефону, натиснувши кнопку нижче або просто напиши його.\n\n"
+        "<i>Твої дані потрібні для створення твого унікального профілю, щоб надати тобі саме те, що тобі потрібно</i>",
         reply_markup=contact_keyboard,
         parse_mode=ParseMode.HTML
     )
@@ -199,14 +209,8 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["phone"] = normalized
     print(f"DEBUG: Нормалізований номер: {normalized}")
-
-    await update.message.reply_text(
-        f"✅ Твій номер <b>{normalized}</b> збережено",
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode=ParseMode.HTML
-    )
+    await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
     return await ask_specialty(update, context)
-
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
@@ -219,7 +223,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
     phone_number = contact.phone_number
     print(f"DEBUG: Отримано контакт (через кнопку): {phone_number} від user_id={user_id}")
 
-    digits_only = re.sub(r"\\D", "", phone_number)
+    digits_only = re.sub(r"\D", "", phone_number)
     if digits_only.startswith("380") and len(digits_only) == 12:
         normalized = "+" + digits_only
     elif len(digits_only) == 10 and digits_only.startswith("0"):
@@ -235,12 +239,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
         return PHONE
 
     context.user_data["phone"] = normalized
-
-    await update.message.reply_text(
-        f"Дякую, твій номер <b>{html.escape(normalized)}</b> збережено",
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode=ParseMode.HTML
-    )
+    await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
     return await ask_specialty(update, context)
 
 async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,12 +247,11 @@ async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Зварювальник", callback_data="spec:Зварювальник")],
         [InlineKeyboardButton("Муляр", callback_data="spec:Муляр")],
         [InlineKeyboardButton("Монолітник", callback_data="spec:Монолітник")],
-        [InlineKeyboardButton("Арматурник", callback_data="spec:Арматурник")],
-        [InlineKeyboardButton("Інша спеціальність", callback_data="spec:other")]
+        [InlineKeyboardButton("Арматурник", callback_data="spec:Арматурник")]
     ])
 
     await update.message.reply_text(
-        "Обери свою спеціальність:",
+        "Тепер обери свою спеціальність",
         reply_markup=keyboard
     )
     return SPECIALTY
@@ -265,36 +263,10 @@ async def handle_specialty_selection(update: Update, context: ContextTypes.DEFAU
 
     if data.startswith("spec:"):
         specialty = data.replace("spec:", "")
-        if specialty == "other":
-            await query.edit_message_text("✏️ Напиши вручну свою спеціальність:")
-            return SPECIALTY
-        else:
-            context.user_data["specialty"] = specialty
-            await query.edit_message_text(f"✅ Спеціальність: <b>{html.escape(specialty)}</b>", parse_mode=ParseMode.HTML)
-            return await ask_experience(update, context)
+        context.user_data["specialty"] = specialty
+        await query.edit_message_text(f"✅ Спеціальність: <b>{html.escape(specialty)}</b>", parse_mode=ParseMode.HTML)
+        return await ask_experience(update, context)
 
-async def handle_manual_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    specialty = update.message.text.strip()
-
-    # Базовая валидация
-    if not specialty or len(specialty) < 2 or any(c in specialty for c in "!@#$%^&*(){}[]<>"):
-        await update.message.reply_text(
-            "⚠️ Введ коректну спеціальність (не менше 2 літер, без спецсимволів)."
-        )
-        return SPECIALTY
-
-    if specialty in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text(
-            "⚠️ Це виглядає як кнопка. Введи свою спеціальність вручну."
-        )
-        return SPECIALTY
-
-    context.user_data["specialty"] = specialty
-    await update.message.reply_text(
-        f"✅ Спеціальність збережено: <b>{html.escape(specialty)}</b>",
-        parse_mode=ParseMode.HTML
-    )
-    return await ask_experience(update, context)
 
 
 async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -307,12 +279,22 @@ async def ask_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat = update.effective_chat
     user_name = context.user_data.get("name", "друже")
+
     await context.bot.send_message(
         chat_id=chat.id,
-        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗\nСкільки років ти працюєш за спеціальністю?",
+        text=f"Чудово, <b>{html.escape(user_name)}</b>! Ще трошки! 🤗",
+        parse_mode=ParseMode.HTML
+    )
+
+    await asyncio.sleep(1)
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text="Скільки років ти працюєш за спеціальністю?",
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML
     )
+
     return EXPERIENCE
 
 async def handle_experience_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -330,52 +312,39 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
 
         context.user_data["experience"] = experience
         await query.edit_message_text(f"✅ Досвід: <b>{html.escape(experience)}</b> років", parse_mode=ParseMode.HTML)
-        await query.message.reply_text(
-            "Майже все. Просто вкажи назву компанії, в якій ти працюєш (або працював):"
-        )
-        return COMPANY
+        tg_id = update.effective_user.id
+        user_obj = update.effective_user
+        try:
+            await insert_or_update_user(
+                tg_id=tg_id,
+                first_name=context.user_data.get("name"),
+                last_name=context.user_data.get("surname"),
+                phone=context.user_data.get("phone"),
+                speciality=context.user_data.get("specialty"),
+                experience=experience,
+                username=user_obj.username,
+                updated_at=datetime.utcnow()
+            )
 
-async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    company = update.message.text.strip()
+            await query.message.reply_text(
+                "✅ Готово! Тепер задавай мені будь-яке питання з безпеки праці або проходь курс <b>Навчання з Охорони Праці</b> — кнопка знизу екрана",
+                parse_mode=ParseMode.HTML
+            )
+            await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
 
-    if not company or len(company) < 2 or company in ["📋 Профіль", "✏️ Оновити анкету"]:
-        await update.message.reply_text("⚠️ Введи коректну назву компанії.")
-        return COMPANY
+            await query.message.reply_text(
+                "Я завжди на звʼязку — чекаю на твої питання 24/7! \U0001FAE1",
+                reply_markup=menu_keyboard,
+                parse_mode = ParseMode.HTML
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+        except Exception as e:
+            print(f"ERROR: Не вдалося зберегти анкету в базу: {e}")
+            await query.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
+            return ConversationHandler.END
 
-    context.user_data["company"] = company
-    tg_id = update.effective_user.id
-    user_obj = update.effective_user
 
-    try:
-        await insert_or_update_user(
-            tg_id=tg_id,
-            first_name=context.user_data.get("name"),
-            last_name=context.user_data.get("surname"),
-            phone=context.user_data.get("phone"),
-            speciality=context.user_data.get("specialty"),
-            experience=context.user_data.get("experience"),
-            company=company,
-            username=user_obj.username,
-            updated_at=datetime.utcnow()
-        )
-
-        await update.message.reply_text(
-            "✅ Анкету збережено!\n\n"
-            "Тепер задавай мені будь-яке питання з <b>безпеки праці</b> або проходь курс "
-            "<b>“Навчання з Охорони Праці”</b> — кнопка знизу екрана.\n\n"
-            "Я завжди на звʼязку — чекаю на твої питання <b>24/7</b>!",
-            reply_markup=menu_keyboard,
-            parse_mode=ParseMode.HTML
-        )
-
-        print(f"DEBUG: Дані збережено для tg_id={tg_id}")
-
-    except Exception as e:
-        print(f"ERROR: Не вдалося зберегти анкету в базу для {tg_id}: {e}")
-        await update.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
-
-    context.user_data.clear()
-    return ConversationHandler.END
 
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -387,8 +356,8 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = result.scalar_one_or_none()
 
             if user is None:
-                await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-                return ConversationHandler.END
+                print(f"DEBUG: Користувач {tg_id} не знайдений у базі — запускаємо start()")
+                return await start(update, context)
 
             profile_text = (
                 f"👤 <b>Твоя анкета:</b>\n"
@@ -397,7 +366,6 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Телефон:</b> {user.phone or 'N/A'}\n"
                 f"<b>Спеціальність:</b> {user.speciality or 'N/A'}\n"
                 f"<b>Досвід:</b> {user.experience or 'N/A'}\n"
-                f"<b>Компанія:</b> {user.company or 'N/A'}"
             )
 
             # Показываем профиль и одновременно обновляем клавиатуру
@@ -417,12 +385,19 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await is_registered(user_id):
-        await update.message.reply_text("Ти ще не зареєстрований. Напиши /start.")
-        return ConversationHandler.END
+        print(f"DEBUG: Користувач {tg_id} не знайдений у базі — запускаємо start()")
+        return await start(update, context)
 
     print("DEBUG: Оновлення профілю")
-    await update.message.reply_text("Оновимо анкету. Напиши своє імʼя")
+
+    first_name = update.effective_user.first_name or "друже"
+
+    await update.message.reply_text(f"Привіт, {html.escape(first_name)}! Давай оновимо анкету.")
+    await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
+
+    await update.message.reply_text("Напиши своє імʼя")
     return NAME
+
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -445,6 +420,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
+    # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо повідомлення
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Користувач проходить анкету — handle_message пропущено.")
+        return
+
     print("🚀 Отримано текстове повідомлення:", update.message.text)
     user_id = update.effective_user.id
     text = update.message.text
@@ -453,8 +433,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_profile(update, context)
 
     if not await is_registered(user_id):
-        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
-        return
+        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
+        return await start(update, context)
 
     user = update.effective_user
     username = user.username or user.first_name
@@ -464,11 +444,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from qa_engine import get_answer
         answer = get_answer(text)
 
-        # Отправляем ответ с клавиатурой
         await update.message.reply_text(
             text=answer,
             parse_mode=ParseMode.HTML,
-            reply_markup=menu_keyboard  # ← сразу прикрепляем актуальное меню
+            reply_markup=menu_keyboard
         )
 
     except ImportError:
@@ -480,13 +459,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
-    if not await is_registered(user_id):
-        await update.message.reply_text("Спочатку треба заповнити анкету. Напиши /start.")
+
+    # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо голос
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Користувач проходить анкету — handle_voice пропущено.")
         return
+
+    if not await is_registered(user_id):
+        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
+        return await start(update, context)
 
     voice = update.message.voice
     user = update.message.from_user
@@ -500,13 +484,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(input_ogg)
         print(f"DEBUG: Voice file downloaded to {input_ogg}")
 
-        print("DEBUG: Конвертація через ffmpeg")
-        process = subprocess.run(
-            ["ffmpeg", "-y", "-i", input_ogg, "-acodec", "pcm_s16le", "-ar", "16000", output_wav],
-            capture_output=True, text=True, check=True
-        )
-        print("DEBUG: ffmpeg stdout:", process.stdout)
-        print("DEBUG: ffmpeg stderr:", process.stderr)
+        AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
+        audio = AudioSegment.from_file(input_ogg, format="ogg")
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        audio.export(output_wav, format="wav")
         print(f"DEBUG: Converted file saved to {output_wav}")
 
         with open(output_wav, "rb") as f:
@@ -520,7 +501,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from qa_engine import get_answer
         answer = get_answer(recognized_text)
 
-        # Финальный ответ с клавиатурой
         await update.message.reply_text(
             text=answer,
             parse_mode=ParseMode.HTML,
@@ -528,7 +508,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except FileNotFoundError:
-        print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
+        print("ERROR: ffmpeg не знайдено.")
         await update.message.reply_text("Помилка обробки аудіо: ffmpeg не знайдено.")
     except subprocess.CalledProcessError as e:
         print(f"ERROR: ffmpeg failed: {e}")
@@ -549,7 +529,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
-
 
 
 
@@ -585,12 +564,8 @@ async def lifespan(app: FastAPI):
                 MessageHandler(filters.CONTACT, process_contact_info),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)
             ],
-            SPECIALTY: [
-                CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)
-            ],
+            SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:")],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
-            COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False
@@ -605,8 +580,21 @@ async def lifespan(app: FastAPI):
 
     # 4. Хендлери на текстові кнопки
     application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Обробка голосу — лише якщо не в середині анкети
+    application.add_handler(
+        MessageHandler(
+            filters.VOICE & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_voice
+        )
+    )
+
+    # Обробка тексту — лише якщо не команда і не в стані анкети
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_message
+        )
+    )
 
     # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
     application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
