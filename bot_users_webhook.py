@@ -105,11 +105,21 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
 async def entry_point_for_new_user_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(
+        f"DEBUG: entry_point_for_new_user_text: Received update. Message text: '{update.message.text if update.message else 'No message'}'")
     """
     Цей entry_point для ConversationHandler спрацьовує на текстові повідомлення.
     Він починає анкету, якщо користувач незареєстрований і анкета ще не почата.
     """
     user_id = update.effective_user.id
+
+    is_prof_started = context.user_data.get("profile_started")
+    user_is_registered = await is_registered(user_id)
+    print(f"DEBUG: entry_point_for_new_user_text: profile_started={is_prof_started}, is_registered={user_is_registered}")
+
+    if is_prof_started or user_is_registered:
+        print(f"DEBUG: entry_point_for_new_user_text: Condition met, returning None.")
+        return None # Важливо для передачі керування іншим обробникам
 
     # Якщо анкета вже активна (наприклад, через /start) АБО користувач вже зареєстрований,
     # цей entry_point не повинен втручатися. Повернення None дозволить
@@ -368,6 +378,8 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
         except Exception as e:
             print(f"ERROR: Не вдалося зберегти анкету в базу: {e}")
             await query.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
+            context.user_data.pop("profile_started", None)  # Видаляємо прапор
+            context.user_data.clear()
             return ConversationHandler.END
 
 
@@ -405,7 +417,9 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при завантаженні профілю.")
 
-    return ConversationHandler.END
+    #return ConversationHandler.END
+    return
+
 
 
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -443,7 +457,11 @@ async def handle_user_question_with_thinking(update: Update, context: ContextTyp
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    print(f"DEBUG: handle_message: TOP LEVEL. Received update. Message text: '{update.message.text if update.message and update.message.text else 'Non-text or no message'}'")
+
     if not update.message or not update.message.text:
+        print("DEBUG: handle_message: No message or no text in message. Returning.")
         return
 
     # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо повідомлення
@@ -606,10 +624,10 @@ async def lifespan(app: FastAPI):
     application.add_handler(conv_handler)
 
     # 3. Команди / функціональні хендлери
-    application.add_handler(CommandHandler("start", start))
+    #application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("support", support_command))
     application.add_handler(CommandHandler("profile", show_profile))
-    application.add_handler(CommandHandler("update_profile", update_profile))
+    #application.add_handler(CommandHandler("update_profile", update_profile))
 
     # 4. Хендлери на текстові кнопки
     application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
@@ -630,8 +648,8 @@ async def lifespan(app: FastAPI):
     )
 
     # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
-    application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
-    application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
+    #application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
+    #application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
 
     # 6. Запуск
     await application.initialize()
