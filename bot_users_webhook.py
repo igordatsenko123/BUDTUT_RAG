@@ -104,6 +104,31 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
+async def entry_point_for_new_user_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Цей entry_point для ConversationHandler спрацьовує на текстові повідомлення.
+    Він починає анкету, якщо користувач незареєстрований і анкета ще не почата.
+    """
+    user_id = update.effective_user.id
+
+    # Якщо анкета вже активна (наприклад, через /start) АБО користувач вже зареєстрований,
+    # цей entry_point не повинен втручатися. Повернення None дозволить
+    # ConversationHandler передати обробку іншим хендлерам (включаючи основний handle_message).
+    if context.user_data.get("profile_started") or await is_registered(user_id):
+        return None # Важливо для передачі керування іншим обробникам
+
+    # Користувач не зареєстрований, і анкета ще не почата. Починаємо.
+    print(f"DEBUG: entry_point_for_new_user_text: User {user_id} is new. Initiating survey.")
+    await update.message.reply_text(
+        "Привіт! Я твій помічник з безпеки праці ⛑️ Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=ParseMode.HTML
+    )
+    await asyncio.sleep(1)
+    await update.message.reply_text("Напиши своє імʼя", parse_mode=ParseMode.HTML)
+    context.user_data["profile_started"] = True
+    return NAME # Повертаємо початковий стан для ConversationHandler
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -434,7 +459,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not await is_registered(user_id):
         print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
-        return await start(update, context)
+        await update.message.reply_text(
+            "Здається, ви ще не зареєстровані. Будь ласка, використайте команду /start, щоб розпочати."
+        )
+        return
 
     user = update.effective_user
     username = user.username or user.first_name
@@ -470,7 +498,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not await is_registered(user_id):
         print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
-        return await start(update, context)
+        await update.message.reply_text(
+            "Здається, ви ще не зареєстровані. Будь ласка, використайте команду /start, щоб розпочати."
+        )
+        return
 
     voice = update.message.voice
     user = update.message.from_user
@@ -554,6 +585,7 @@ async def lifespan(app: FastAPI):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, entry_point_for_new_user_text),
             CommandHandler("update_profile", update_profile),
             MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
         ],
@@ -564,40 +596,37 @@ async def lifespan(app: FastAPI):
                 MessageHandler(filters.CONTACT, process_contact_info),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)
             ],
-            SPECIALTY: [
-                CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_specialty)
-            ],
+            SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:")],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False, # Важливо для анкет
-        # map_to_parent={ # Якщо потрібно вийти з діалогу і передати керування іншому ConversationHandler (не ваш випадок зараз)
-        #     ConversationHandler.END: ConversationHandler.END
-        # }
+        per_message=False
     )
-    application.add_handler(conv_handler, group=0) # Додаємо з групою 0
-
-
+    application.add_handler(conv_handler)
 
     # 3. Команди / функціональні хендлери
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("support", support_command), group=1)
-    application.add_handler(CommandHandler("profile", show_profile), group=1)
-    application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile), group=1)
+    application.add_handler(CommandHandler("support", support_command))
+    application.add_handler(CommandHandler("profile", show_profile))
+    application.add_handler(CommandHandler("update_profile", update_profile))
 
     # 4. Хендлери на текстові кнопки
     application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
     # Обробка голосу — лише якщо не в середині анкети
+    application.add_handler(
+        MessageHandler(
+            filters.VOICE & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_voice
+        )
+    )
 
-    application.add_handler(MessageHandler(
-        filters.VOICE & ~filters.UpdateType.EDITED_MESSAGE & ~filters.UpdateType.CHANNEL_POST,
-        handle_voice
-    ), group=1)
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED_MESSAGE & ~filters.UpdateType.CHANNEL_POST,
-        handle_message
-    ), group=1)
+    # Обробка тексту — лише якщо не команда і не в стані анкети
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_message
+        )
+    )
 
     # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
     application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
