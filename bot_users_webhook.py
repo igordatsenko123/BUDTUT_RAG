@@ -108,10 +108,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
 
-    # 🛑 Запобігаємо повторному запуску анкети
-    if context.user_data.get("profile_started"):
-        print("DEBUG: Анкета вже почата — пропускаємо повторний запуск.")
-        return
+
 
     context.user_data["profile_started"] = True
 
@@ -157,6 +154,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NAME
 
     context.user_data["name"] = name
+    context.user_data["profile_started"] = True  # ✅ Ставимо тільки коли реально стартуємо анкету
     await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
