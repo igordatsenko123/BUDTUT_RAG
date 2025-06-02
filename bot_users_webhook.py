@@ -110,8 +110,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-    context.user_data["profile_started"] = True
-
     if await is_registered(user_id):
         try:
             async with SessionLocal() as session:
