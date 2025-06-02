@@ -104,10 +104,16 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
+
+    # 🛑 Запобігаємо повторному запуску анкети
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Анкета вже почата — пропускаємо повторний запуск.")
+        return
+
+    context.user_data["profile_started"] = True
 
     if await is_registered(user_id):
         try:
@@ -121,11 +127,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=menu_keyboard,
                         parse_mode=ParseMode.HTML
                     )
-
                     return ConversationHandler.END
                 else:
                     raise ValueError("Дані користувача не знайдено")
-
         except Exception as e:
             print(f"ERROR: Не вдалося завантажити профіль для {user_id}: {e}")
             await update.message.reply_text(
@@ -138,17 +142,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
-
-        await asyncio.sleep(1)  # ⏱️ Затримка в 1 секунду
-
+        await asyncio.sleep(1)
         await update.message.reply_text(
             "Напиши своє імʼя",
             parse_mode=ParseMode.HTML
         )
-
         return NAME
-
-
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text.strip()
