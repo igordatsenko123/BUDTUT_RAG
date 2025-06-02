@@ -476,12 +476,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📋 Профіль":
         return await show_profile(update, context)
 
-    if not await is_registered(user_id):
-        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
+    user_is_registered = await is_registered(user_id)
+    print(f"DEBUG: handle_message: is_registered={user_is_registered} for user_id={user_id}")
+
+    if not user_is_registered:
+        print(f"DEBUG: handle_message: User {user_id} is not registered. Prompting to /start.")
         await update.message.reply_text(
-            "Здається, ви ще не зареєстровані. Будь ласка, використайте команду /start, щоб розпочати."
+            "Спочатку треба зареєструватися. Будь ласка, введи команду /start, щоб розпочати."
         )
         return
+
 
     user = update.effective_user
     username = user.username or user.first_name
@@ -604,7 +608,7 @@ async def lifespan(app: FastAPI):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            MessageHandler(filters.TEXT & ~filters.COMMAND, entry_point_for_new_user_text),
+            #MessageHandler(filters.TEXT & ~filters.COMMAND, entry_point_for_new_user_text),
             CommandHandler("update_profile", update_profile),
             MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
         ],
