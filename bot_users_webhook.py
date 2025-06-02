@@ -108,7 +108,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
 
-
+    # 🛑 Запобігаємо повторному запуску анкети
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Анкета вже почата — пропускаємо повторний запуск.")
+        return
 
     if await is_registered(user_id):
         try:
@@ -130,6 +133,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "Вибачте, виникла помилка з вашим профілем. Давайте заповнимо анкету знову. Як тебе звати?"
             )
+            context.user_data["profile_started"] = True
             return NAME
     else:
         await update.message.reply_text(
@@ -138,10 +142,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         await asyncio.sleep(1)
-        await update.message.reply_text(
-            "Напиши своє імʼя",
-            parse_mode=ParseMode.HTML
-        )
+        await update.message.reply_text("Напиши своє імʼя", parse_mode=ParseMode.HTML)
+        context.user_data["profile_started"] = True
         return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -152,7 +154,6 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NAME
 
     context.user_data["name"] = name
-    context.user_data["profile_started"] = True  # ✅ Ставимо тільки коли реально стартуємо анкету
     await update.message.reply_text("Окей! А тепер прізвище", reply_markup=ReplyKeyboardRemove())
     return SURNAME
 
@@ -208,12 +209,8 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["phone"] = normalized
     print(f"DEBUG: Нормалізований номер: {normalized}")
-
-    # Повідомлення з підтвердженням і видаленням клавіатури
     await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
-
     return await ask_specialty(update, context)
-
 
 async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
@@ -242,10 +239,7 @@ async def process_contact_info(update: Update, context: ContextTypes.DEFAULT_TYP
         return PHONE
 
     context.user_data["phone"] = normalized
-
-    # Повідомлення з підтвердженням і видаленням клавіатури
     await update.message.reply_text("Окей, рухаємося далі ✅", reply_markup=ReplyKeyboardRemove())
-
     return await ask_specialty(update, context)
 
 async def ask_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -426,6 +420,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
+    # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо повідомлення
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Користувач проходить анкету — handle_message пропущено.")
+        return
+
     print("🚀 Отримано текстове повідомлення:", update.message.text)
     user_id = update.effective_user.id
     text = update.message.text
@@ -445,11 +444,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from qa_engine import get_answer
         answer = get_answer(text)
 
-        # Отправляем ответ с клавиатурой
         await update.message.reply_text(
             text=answer,
             parse_mode=ParseMode.HTML,
-            reply_markup=menu_keyboard  # ← сразу прикрепляем актуальное меню
+            reply_markup=menu_keyboard
         )
 
     except ImportError:
@@ -461,10 +459,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
+
+    # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо голос
+    if context.user_data.get("profile_started"):
+        print("DEBUG: Користувач проходить анкету — handle_voice пропущено.")
+        return
+
     if not await is_registered(user_id):
         print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
         return await start(update, context)
@@ -481,7 +484,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(input_ogg)
         print(f"DEBUG: Voice file downloaded to {input_ogg}")
 
-        print("DEBUG: Конвертація через pydub + imageio-ffmpeg")
         AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
         audio = AudioSegment.from_file(input_ogg, format="ogg")
         audio = audio.set_frame_rate(16000).set_channels(1)
@@ -499,7 +501,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from qa_engine import get_answer
         answer = get_answer(recognized_text)
 
-        # Финальный ответ с клавиатурой
         await update.message.reply_text(
             text=answer,
             parse_mode=ParseMode.HTML,
@@ -507,7 +508,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except FileNotFoundError:
-        print("ERROR: ffmpeg не знайдено. Переконайтесь, що він встановлений та є в PATH.")
+        print("ERROR: ffmpeg не знайдено.")
         await update.message.reply_text("Помилка обробки аудіо: ffmpeg не знайдено.")
     except subprocess.CalledProcessError as e:
         print(f"ERROR: ffmpeg failed: {e}")
@@ -528,7 +529,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"DEBUG: Removed temp file {fpath}")
                 except OSError as e:
                     print(f"ERROR: Could not remove temp file {fpath}: {e}")
-
 
 
 
