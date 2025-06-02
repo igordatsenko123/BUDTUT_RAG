@@ -600,7 +600,7 @@ async def lifespan(app: FastAPI):
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False
+        per_message=True
     )
     application.add_handler(conv_handler)
 
