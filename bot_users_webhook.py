@@ -580,8 +580,21 @@ async def lifespan(app: FastAPI):
 
     # 4. Хендлери на текстові кнопки
     application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Обробка голосу — лише якщо не в середині анкети
+    application.add_handler(
+        MessageHandler(
+            filters.VOICE & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_voice
+        )
+    )
+
+    # Обробка тексту — лише якщо не команда і не в стані анкети
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED & ~filters.UpdateType.CHANNEL_POST,
+            handle_message
+        )
+    )
 
     # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
     application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
