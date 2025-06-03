@@ -594,6 +594,18 @@ async def set_bot_commands(application):
         BotCommand("profile", "показати профіль"),
         BotCommand("update_profile", "редагувати профіль"),
     ])
+async def handle_interruption(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("profile_started"):
+        await update.message.reply_text(
+            "⚠️ Анкетування перервано. Якщо хочеш — можеш <b>почати заново</b> командою /start або /update_profile",
+            parse_mode=ParseMode.HTML,
+            reply_markup=menu_keyboard
+        )
+        # Скидаємо флаг анкети та стан
+        context.user_data["profile_started"] = False
+        return ConversationHandler.END
+    return ConversationHandler.END
+
 
 # --- Lifespan для ініціалізації та зупинки бота ---
 @asynccontextmanager
@@ -622,7 +634,11 @@ async def lifespan(app: FastAPI):
             SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:")],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            MessageHandler(filters.ALL, handle_interruption)  # <-- новий хендлер
+        ],
         per_message=False
     )
     application.add_handler(conv_handler)
