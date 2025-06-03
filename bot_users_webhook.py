@@ -139,6 +139,21 @@ async def entry_point_for_new_user_text(update: Update, context: ContextTypes.DE
     context.user_data["profile_started"] = True
     return NAME # Повертаємо початковий стан для ConversationHandler
 
+async def check_and_interrupt_if_profile_started(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Перевіряє, чи користувач перебуває в анкеті.
+    Якщо так — повідомляє про переривання та очищає context.user_data.
+    Повертає True, якщо анкету було перервано.
+    """
+    if context.user_data.get("profile_started"):
+        await update.message.reply_text(
+            "⚠️ Анкету перервано. Якщо хочеш — почни заново з /start або /update_profile.",
+            reply_markup=menu_keyboard
+        )
+        context.user_data.clear()
+        return True
+    return False
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -457,6 +472,8 @@ async def handle_user_question_with_thinking(update: Update, context: ContextTyp
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if await check_and_interrupt_if_profile_started(update, context):
+        return
 
     print(f"DEBUG: handle_message: TOP LEVEL. Received update. Message text: '{update.message.text if update.message and update.message.text else 'Non-text or no message'}'")
 
@@ -511,6 +528,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if await check_and_interrupt_if_profile_started(update, context):
+        return
+
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
 
