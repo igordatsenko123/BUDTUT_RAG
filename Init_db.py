@@ -22,6 +22,7 @@ class User(Base):
     speciality = Column(String(255))
     experience = Column(String(255))
     username = Column(String(255))
+    ref_source = Column(String(255))  # ← Нове поле для джерела переходу
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 engine = create_async_engine(DATABASE_URL, echo=True)
@@ -29,9 +30,11 @@ AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSes
 
 async def init_db():
     async with engine.begin() as conn:
+        print("❌ Видаляємо стару таблицю...")
         await conn.run_sync(Base.metadata.drop_all)
+        print("✅ Створюємо нову таблицю...")
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ Таблиця users успішно пересоздана")
+    print("🎉 Таблиця users успішно пересоздана")
 
 if __name__ == "__main__":
     asyncio.run(init_db())

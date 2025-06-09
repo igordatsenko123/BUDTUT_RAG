@@ -104,6 +104,56 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Пиши нам тут:\nhttps://t.me/ai_safety_coach_support"
     )
+async def entry_point_for_new_user_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(
+        f"DEBUG: entry_point_for_new_user_text: Received update. Message text: '{update.message.text if update.message else 'No message'}'")
+    """
+    Цей entry_point для ConversationHandler спрацьовує на текстові повідомлення.
+    Він починає анкету, якщо користувач незареєстрований і анкета ще не почата.
+    """
+    user_id = update.effective_user.id
+
+    is_prof_started = context.user_data.get("profile_started")
+    user_is_registered = await is_registered(user_id)
+    print(f"DEBUG: entry_point_for_new_user_text: profile_started={is_prof_started}, is_registered={user_is_registered}")
+
+    if is_prof_started or user_is_registered:
+        print(f"DEBUG: entry_point_for_new_user_text: Condition met, returning None.")
+        return None # Важливо для передачі керування іншим обробникам
+
+    # Якщо анкета вже активна (наприклад, через /start) АБО користувач вже зареєстрований,
+    # цей entry_point не повинен втручатися. Повернення None дозволить
+    # ConversationHandler передати обробку іншим хендлерам (включаючи основний handle_message).
+    if context.user_data.get("profile_started") or await is_registered(user_id):
+        return None # Важливо для передачі керування іншим обробникам
+
+    # Користувач не зареєстрований, і анкета ще не почата. Починаємо.
+    print(f"DEBUG: entry_point_for_new_user_text: User {user_id} is new. Initiating survey.")
+    await update.message.reply_text(
+        "Привіт! Я твій помічник з <b>безпеки праці </b> Я допоможу тобі із будь-яким питанням! Давай знайомитись 😊",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=ParseMode.HTML
+    )
+    await asyncio.sleep(1)
+    await update.message.reply_text("Напиши своє імʼя", parse_mode=ParseMode.HTML)
+    context.user_data["profile_started"] = True
+    return NAME # Повертаємо початковий стан для ConversationHandler
+
+async def check_and_interrupt_if_profile_started(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Перевіряє, чи користувач перебуває в анкеті.
+    Якщо так — повідомляє про переривання та очищає context.user_data.
+    Повертає True, якщо анкету було перервано.
+    """
+    if context.user_data.get("profile_started"):
+        await update.message.reply_text(
+            "⚠️ Анкету перервано. Якщо хочеш — почни заново з /start або /update_profile.",
+            reply_markup=menu_keyboard
+        )
+        context.user_data.clear()
+        return True
+    return False
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     print(f"DEBUG: Команда /start от user_id={user_id}")
@@ -337,11 +387,14 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
                 reply_markup=menu_keyboard,
                 parse_mode = ParseMode.HTML
             )
+            context.user_data.pop("profile_started", None)  # Видаляємо прапор
             context.user_data.clear()
             return ConversationHandler.END
         except Exception as e:
             print(f"ERROR: Не вдалося зберегти анкету в базу: {e}")
             await query.message.reply_text("⚠️ Вибач, сталася помилка при збереженні анкети.")
+            context.user_data.pop("profile_started", None)  # Видаляємо прапор
+            context.user_data.clear()
             return ConversationHandler.END
 
 
@@ -379,7 +432,9 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"ERROR: Не вдалося завантажити профіль для {tg_id}: {e}")
         await update.message.reply_text("Вибачте, сталася помилка при завантаженні профілю.")
 
-    return ConversationHandler.END
+    #return ConversationHandler.END
+    return
+
 
 
 async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -417,7 +472,13 @@ async def handle_user_question_with_thinking(update: Update, context: ContextTyp
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if await check_and_interrupt_if_profile_started(update, context):
+        return
+
+    print(f"DEBUG: handle_message: TOP LEVEL. Received update. Message text: '{update.message.text if update.message and update.message.text else 'Non-text or no message'}'")
+
     if not update.message or not update.message.text:
+        print("DEBUG: handle_message: No message or no text in message. Returning.")
         return
 
     # 🔒 Перевірка: якщо користувач у процесі анкети — не обробляємо повідомлення
@@ -432,9 +493,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📋 Профіль":
         return await show_profile(update, context)
 
-    if not await is_registered(user_id):
-        print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
-        return await start(update, context)
+    user_is_registered = await is_registered(user_id)
+    print(f"DEBUG: handle_message: is_registered={user_is_registered} for user_id={user_id}")
+
+    if not user_is_registered:
+        print(f"DEBUG: handle_message: User {user_id} is not registered. Prompting to /start.")
+        await update.message.reply_text(
+            "Спочатку треба зареєструватися. Будь ласка, введи команду /start, щоб розпочати."
+        )
+        return
+
 
     user = update.effective_user
     username = user.username or user.first_name
@@ -460,6 +528,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if await check_and_interrupt_if_profile_started(update, context):
+        return
+
     user_id = update.effective_user.id
     print("DEBUG: Обробка голосового повідомлення")
 
@@ -470,7 +542,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not await is_registered(user_id):
         print(f"DEBUG: Користувач {user_id} не зареєстрований — запускаємо start()")
-        return await start(update, context)
+        await update.message.reply_text(
+            "Здається, ви ще не зареєстровані. Будь ласка, використайте команду /start, щоб розпочати."
+        )
+        return
 
     voice = update.message.voice
     user = update.message.from_user
@@ -540,6 +615,18 @@ async def set_bot_commands(application):
         BotCommand("profile", "показати профіль"),
         BotCommand("update_profile", "редагувати профіль"),
     ])
+async def handle_interruption(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("profile_started"):
+        await update.message.reply_text(
+            "⚠️ Анкетування перервано. Якщо хочеш — можеш <b>почати заново</b> командою /start або /update_profile",
+            parse_mode=ParseMode.HTML,
+            reply_markup=menu_keyboard
+        )
+        # Скидаємо флаг анкети та стан
+        context.user_data["profile_started"] = False
+        return ConversationHandler.END
+    return ConversationHandler.END
+
 
 # --- Lifespan для ініціалізації та зупинки бота ---
 @asynccontextmanager
@@ -554,6 +641,7 @@ async def lifespan(app: FastAPI):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
+            #MessageHandler(filters.TEXT & ~filters.COMMAND, entry_point_for_new_user_text),
             CommandHandler("update_profile", update_profile),
             MessageHandler(filters.Regex('^✏️ Оновити анкету$'), update_profile),
         ],
@@ -567,16 +655,20 @@ async def lifespan(app: FastAPI):
             SPECIALTY: [CallbackQueryHandler(handle_specialty_selection, pattern="^spec:")],
             EXPERIENCE: [CallbackQueryHandler(handle_experience_selection, pattern="^exp:")],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            MessageHandler(filters.ALL, handle_interruption)  # <-- новий хендлер
+        ],
         per_message=False
     )
     application.add_handler(conv_handler)
 
     # 3. Команди / функціональні хендлери
-    application.add_handler(CommandHandler("start", start))
+    #application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("support", support_command))
     application.add_handler(CommandHandler("profile", show_profile))
-    application.add_handler(CommandHandler("update_profile", update_profile))
+    #application.add_handler(CommandHandler("update_profile", update_profile))
 
     # 4. Хендлери на текстові кнопки
     application.add_handler(MessageHandler(filters.Regex('^📋 Профіль$'), show_profile))
@@ -597,8 +689,8 @@ async def lifespan(app: FastAPI):
     )
 
     # 5. Callback-хендлери (для кнопок типу InlineKeyboard)
-    application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
-    application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
+    #application.add_handler(CallbackQueryHandler(handle_experience_selection, pattern="^exp:"))
+    #application.add_handler(CallbackQueryHandler(handle_specialty_selection, pattern="^spec:"))
 
     # 6. Запуск
     await application.initialize()

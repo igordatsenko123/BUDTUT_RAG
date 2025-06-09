@@ -14,4 +14,5 @@ class User(Base):
     speciality = Column(String)
     experience = Column(String)
     username = Column(String)
+    ref_source = Column(String)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
