@@ -162,7 +162,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"DEBUG: Користувач {user_id} перейшов по посиланню з параметром: {source_id}")
         context.user_data["ref_source"] = source_id
 
-
+        # Якщо юзер вже є — оновимо тільки ref_source
+        async with SessionLocal() as session:
+            result = await session.execute(select(User).where(User.tg_id == user_id))
+            user = result.scalar_one_or_none()
+            if user and user.ref_source != source_id:
+                print(f"DEBUG: Оновлюємо ref_source для {user_id} → {source_id}")
+                user.ref_source = source_id
+                await session.commit()
     print(f"DEBUG: Команда /start от user_id={user_id}")
 
 

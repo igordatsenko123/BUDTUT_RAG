@@ -156,7 +156,16 @@ async def check_and_interrupt_if_profile_started(update: Update, context: Contex
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    args = context.args
+    if args:
+        source_id = args[0]
+        print(f"DEBUG: Користувач {user_id} перейшов по посиланню з параметром: {source_id}")
+        context.user_data["ref_source"] = source_id
+
+
     print(f"DEBUG: Команда /start от user_id={user_id}")
+
+
 
     # 🛑 Запобігаємо повторному запуску анкети
     if context.user_data.get("profile_started"):
@@ -373,7 +382,8 @@ async def handle_experience_selection(update: Update, context: ContextTypes.DEFA
                 speciality=context.user_data.get("specialty"),
                 experience=experience,
                 username=user_obj.username,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
+                ref_source=context.user_data.get("ref_source")
             )
 
             await query.message.reply_text(
