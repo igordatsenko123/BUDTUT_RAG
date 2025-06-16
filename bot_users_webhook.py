@@ -57,7 +57,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE = range(5)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://www.linkedin.com/feed/"))]
+        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://ua.korrespondent.net/"))]
     ],
     resize_keyboard=True
 )
