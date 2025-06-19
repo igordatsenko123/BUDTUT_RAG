@@ -57,7 +57,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE = range(5)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://ai-safety-coach.webflow.io/contact"))]
+        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://tally.so/r/w4RNRo"))]
     ],
     resize_keyboard=True
 )
