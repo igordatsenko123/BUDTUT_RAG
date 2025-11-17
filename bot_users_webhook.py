@@ -57,7 +57,7 @@ NAME, SURNAME, PHONE, SPECIALTY, EXPERIENCE = range(5)
 
 menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://safe-weld-path.lovable.app/module"))]
+        [KeyboardButton("💪 Навчальний курс", web_app=WebAppInfo(url="https://safe-weld-path.lovable.app"))]
     ],
     resize_keyboard=True
 )
